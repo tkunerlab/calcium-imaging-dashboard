@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import shutil
@@ -11,6 +12,26 @@ from typing import Any, Dict
 
 import h5py
 import numpy as np
+
+
+def _make_visible(path: str) -> None:
+    """Remove the Windows hidden attribute inherited by mapped-drive files."""
+    if os.name != "nt":
+        return
+
+    hidden_attribute = 0x2
+    invalid_attributes = 0xFFFFFFFF
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetFileAttributesW.argtypes = [ctypes.c_wchar_p]
+    kernel32.GetFileAttributesW.restype = ctypes.c_uint32
+    kernel32.SetFileAttributesW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32]
+    kernel32.SetFileAttributesW.restype = ctypes.c_int
+    attributes = kernel32.GetFileAttributesW(str(path))
+    if attributes == invalid_attributes:
+        raise ctypes.WinError(ctypes.get_last_error())
+    if attributes & hidden_attribute:
+        if not kernel32.SetFileAttributesW(str(path), attributes & ~hidden_attribute):
+            raise ctypes.WinError(ctypes.get_last_error())
 
 
 class SaveCoordinator:
@@ -34,7 +55,7 @@ class SaveCoordinator:
         os.makedirs(output_dir, exist_ok=True)
 
         fd, staging_db = tempfile.mkstemp(
-            prefix=f".{Path(final_processed).stem}.workspace.",
+            prefix=f"{Path(final_processed).stem}.workspace.",
             suffix=Path(final_processed).suffix,
             dir=output_dir,
         )
@@ -90,7 +111,7 @@ class SaveCoordinator:
                 final_match = self._matching_filename(database, mouse, cohort)
                 match_dir = os.path.dirname(final_match) or "."
                 fd, staging_match = tempfile.mkstemp(
-                    prefix=f".{Path(final_match).stem}.", suffix=".mat", dir=match_dir
+                    prefix=f"{Path(final_match).stem}.", suffix=".mat", dir=match_dir
                 )
                 os.close(fd)
                 database.save_matching_results(
@@ -112,8 +133,10 @@ class SaveCoordinator:
                     raise ValueError("Processed checkpoint is missing the database root.")
 
             os.replace(staging_db, final_processed)
+            _make_visible(final_processed)
             for staging_match, final_match in matching_outputs:
                 os.replace(staging_match, final_match)
+                _make_visible(final_match)
 
             database.processed_db_path = final_processed
             database.active_db_path = final_processed

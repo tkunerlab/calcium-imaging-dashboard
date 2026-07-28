@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Keep processed databases and matching-result files visible when saving on
+  Windows mapped drives.
+
 ## [0.1.0] - 2026-07-28
 
 ### Added
