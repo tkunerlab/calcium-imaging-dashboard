@@ -33,6 +33,11 @@ Double-click `install-windows.bat`, or run:
 .\install-windows.bat
 ```
 
+The installer shows progress and waits for confirmation before closing. It
+installs the isolated Python environment under
+`%LOCALAPPDATA%\CalciumImagingDashboard\venv`, so cloning the repository to a
+mapped or network drive does not slow down the installed application.
+
 ### Linux
 
 ```bash
@@ -49,23 +54,23 @@ chmod +x install-macos.command
 ./install-macos.command
 ```
 
-Each installer creates an isolated `.venv` environment in the repository and
-installs the two application commands. Running an installer again rebuilds that
-dedicated environment; it does not alter databases or analysis files.
+On Linux and macOS, the installers create an isolated `.venv` in the repository.
+On Windows, the environment is stored in Local AppData. Running an installer
+again refreshes its dedicated environment; it does not alter databases or
+analysis files.
+
+If an earlier version created `.venv` inside the repository, the new Windows
+launchers no longer use it. You may remove that old folder manually after
+confirming that both new launchers work.
 
 ## Launch
 
-Activate the environment, then run either application. Both commands open the
-browser automatically.
+On Windows, double-click one of the launchers in the repository:
 
-Windows:
+- `launch-dashboard.bat`
+- `launch-db-builder.bat`
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-cell-registration-dashboard
-```
-
-Linux or macOS:
+On Linux or macOS, activate the environment and run either command:
 
 ```bash
 source .venv/bin/activate
@@ -74,13 +79,14 @@ cell-registration-dashboard
 
 To open a database immediately:
 
-```bash
-cell-registration-dashboard --database /path/to/Database.mat
+```powershell
+.\launch-dashboard.bat --database "C:\path\to\Database.mat"
 ```
 
-Launch the database builder with:
+On Linux or macOS, the equivalent commands are:
 
 ```bash
+cell-registration-dashboard --database /path/to/Database.mat
 db-builder
 ```
 

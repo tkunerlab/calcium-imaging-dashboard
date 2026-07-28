@@ -4,4 +4,6 @@ include THIRD_PARTY_NOTICES.md
 include install-windows.bat
 include install-linux.sh
 include install-macos.command
+include launch-dashboard.bat
+include launch-db-builder.bat
 recursive-include tests *.py

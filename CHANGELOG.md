@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - Standalone installable Python package.
 - `cell-registration-dashboard` and `db-builder` command-line entry points.
 - Windows, Linux, and macOS installation helpers.
+- Reliable Windows installation in Local AppData with visible progress and
+  repository-root launchers.
 - Offline frontend dependencies.
 - Dynamic HDF5 root discovery with `Database` as the preferred schema root.
 - Auto-cleaning by spatial-footprint area and positive temporal activity, with
