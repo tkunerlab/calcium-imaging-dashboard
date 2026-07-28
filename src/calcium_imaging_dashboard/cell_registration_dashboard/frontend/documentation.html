@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calcium Imaging Dashboard — User & Developer Guide</title>
+  <style>
+    :root {
+      --bg: #090f1d; --panel: #111a2d; --panel-2: #16223a; --line: #263552;
+      --text: #edf3ff; --muted: #a8b5cc; --blue: #6ea8ff; --indigo: #8b7cff;
+      --green: #4ad7a1; --amber: #f7c66b; --red: #ff7d8d; --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+    body { margin: 0; color: var(--text); background: radial-gradient(circle at 70% -10%, #1b2c55 0, transparent 32rem), var(--bg); font: 15px/1.65 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    a { color: var(--blue); text-decoration: none; } a:hover { text-decoration: underline; }
+    code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
+    code { color: #dbe7ff; background: #0a1222; border: 1px solid #25334d; border-radius: 5px; padding: .1em .35em; }
+    pre { overflow-x: auto; margin: 1rem 0; padding: 1rem 1.1rem; color: #dbe7ff; background: #080e1a; border: 1px solid var(--line); border-radius: 12px; }
+    h1, h2, h3, h4 { line-height: 1.22; letter-spacing: -.02em; }
+    h1 { margin: .35rem 0 1rem; max-width: 860px; font-size: clamp(2.25rem, 5vw, 4.7rem); }
+    h2 { margin: 0 0 .85rem; font-size: clamp(1.65rem, 3vw, 2.45rem); }
+    h3 { margin: 1.6rem 0 .55rem; font-size: 1.25rem; }
+    h4 { margin: 1.15rem 0 .35rem; font-size: 1rem; }
+    p { margin: .55rem 0 1rem; color: var(--muted); }
+    ul, ol { margin: .5rem 0 1.25rem; padding-left: 1.35rem; color: var(--muted); }
+    li { margin: .36rem 0; } strong { color: var(--text); }
+    .topbar { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid rgba(68,86,122,.55); background: rgba(9,15,29,.9); backdrop-filter: blur(14px); }
+    .topbar-inner { max-width: var(--max); margin: auto; min-height: 60px; padding: 0 22px; display: flex; align-items: center; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: white; font-weight: 800; }
+    .brand-mark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(135deg, #477cff, #806cff); box-shadow: 0 8px 24px #477cff44; }
+    .top-links { margin-left: auto; display: flex; gap: 7px; flex-wrap: wrap; }
+    .top-links a { color: #cdd8eb; border: 1px solid transparent; border-radius: 8px; padding: 5px 9px; font-size: .86rem; }
+    .top-links a:hover { text-decoration: none; color: white; border-color: var(--line); background: #121c30; }
+    .hero { max-width: var(--max); margin: auto; padding: 78px 22px 56px; }
+    .eyebrow { color: #aabfff; font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .15em; }
+    .hero-copy { max-width: 800px; font-size: 1.15rem; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 25px; }
+    .button { display: inline-flex; align-items: center; gap: 7px; border-radius: 10px; padding: 9px 14px; font-weight: 750; color: white; background: #2d67e7; border: 1px solid #5689f3; }
+    .button.secondary { color: #dce7fa; background: #121d32; border-color: var(--line); }
+    .button:hover { text-decoration: none; filter: brightness(1.1); }
+    .layout { max-width: var(--max); margin: auto; padding: 0 22px 90px; display: grid; grid-template-columns: 238px minmax(0, 1fr); gap: 34px; }
+    .toc { position: sticky; top: 82px; align-self: start; max-height: calc(100vh - 100px); overflow: auto; padding: 14px; background: rgba(16,25,44,.78); border: 1px solid var(--line); border-radius: 14px; }
+    .toc strong { display: block; padding: 3px 8px 8px; font-size: .72rem; text-transform: uppercase; letter-spacing: .13em; color: #8796af; }
+    .toc a { display: block; padding: 6px 8px; color: #b9c5d8; border-radius: 7px; font-size: .88rem; }
+    .toc a:hover { color: white; text-decoration: none; background: #1a2740; }
+    .content { min-width: 0; }
+    section { margin-bottom: 62px; }
+    .section-lead { max-width: 780px; font-size: 1.05rem; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; margin: 16px 0; }
+    .grid.three { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .card { padding: 17px 18px; border: 1px solid var(--line); border-radius: 13px; background: linear-gradient(145deg, rgba(21,32,54,.94), rgba(13,22,39,.94)); }
+    .card h3, .card h4 { margin-top: 0; }
+    .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+    .step { display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid #22304a; }
+    .step:last-child { border: 0; }
+    .step-num { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: #233a68; color: #cfe0ff; font-weight: 800; }
+    .step p { margin: .15rem 0 .5rem; }
+    .note { margin: 16px 0; padding: 13px 15px; border-left: 3px solid var(--blue); border-radius: 4px 10px 10px 4px; background: #101b31; color: var(--muted); }
+    .note.safe { border-color: var(--green); } .note.warn { border-color: var(--amber); }
+    .badge { display: inline-block; margin: 0 5px 5px 0; padding: 3px 8px; border: 1px solid #314669; border-radius: 999px; color: #c9d7ed; background: #111c30; font-size: .78rem; }
+    .workflow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 20px 0; }
+    .workflow div { position: relative; padding: 12px; text-align: center; color: #dce7fa; background: #15233d; border: 1px solid #314566; border-radius: 10px; font-weight: 750; }
+    .workflow div:not(:last-child)::after { content: "→"; position: absolute; right: -9px; color: #7e96c0; z-index: 2; }
+    figure { margin: 22px 0 28px; border: 1px solid var(--line); border-radius: 15px; overflow: hidden; background: #0c1424; box-shadow: 0 18px 48px #0005; }
+    figure img { width: 100%; display: block; background: #070c16; }
+    figcaption { padding: 11px 14px 13px; color: #aebcd1; font-size: .86rem; border-top: 1px solid var(--line); }
+    .table-wrap { overflow-x: auto; margin: 15px 0; border: 1px solid var(--line); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 600px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #22304a; vertical-align: top; }
+    th { color: #d8e4f7; background: #152038; font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; }
+    td { color: var(--muted); } tr:last-child td { border-bottom: 0; }
+    .tree { white-space: pre; font-size: .86rem; line-height: 1.6; }
+    details { margin: 9px 0; border: 1px solid var(--line); border-radius: 10px; background: #10192b; }
+    summary { cursor: pointer; padding: 11px 13px; color: #dce7fa; font-weight: 750; }
+    details > div { padding: 0 13px 12px; }
+    .footer { padding: 30px 22px 50px; text-align: center; color: #8190a9; border-top: 1px solid #202d45; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .toc { position: relative; top: auto; max-height: none; } .grid.three { grid-template-columns: 1fr 1fr; } .top-links { display: none; } }
+    @media (max-width: 620px) { .hero { padding-top: 50px; } .grid, .grid.three, .workflow { grid-template-columns: 1fr; } .workflow div::after { display: none; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/"><span class="brand-mark">Ca</span><span>Dashboard Guide</span></a>
+      <nav class="top-links" aria-label="Quick navigation">
+        <a href="#quick-start">Quick start</a><a href="#cleaning">Cleaning</a><a href="#alignment">Alignment</a><a href="#matching">Matching</a><a href="#builder">Builder</a><a href="#code">Code guide</a>
+      </nav>
+    </div>
+  </header>
+
+  <header class="hero">
+    <div class="eyebrow">User guide · workflow reference · developer notes</div>
+    <h1>From extracted footprints to clean longitudinal cell tracks.</h1>
+    <p class="hero-copy">This guide covers the complete workflow: building a portable HDF5 database from CaImAn or Minian outputs, cleaning and merging components, aligning fields of view, matching cells across sessions, and safely saving a processed result.</p>
+    <div class="hero-actions"><a class="button" href="#quick-start">Start the workflow</a><a class="button secondary" href="#code">Understand the code</a><a class="button secondary" href="/">Return to dashboard</a></div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc">
+      <strong>On this page</strong>
+      <a href="#mental-model">How the pipeline works</a><a href="#quick-start">Quick start</a><a href="#header">Header & saving</a><a href="#cleaning">1. Cleaning & merging</a><a href="#alignment">2. Session alignment</a><a href="#matching">3. Cell matching</a><a href="#builder">Database builder</a><a href="#data-format">HDF5 data format</a><a href="#code">Code architecture</a><a href="#api">API map</a><a href="#performance">Performance notes</a><a href="#troubleshooting">Troubleshooting</a><a href="#glossary">Glossary</a>
+    </aside>
+
+    <main class="content">
+      <section id="mental-model">
+        <div class="eyebrow">The important mental model</div><h2>Raw input, in-memory work, one processed checkpoint</h2>
+        <p class="section-lead">Treat the raw database as the reproducible source. Interactive changes are accumulated in a shared working state and immediately follow you between tabs. The header <strong>Save</strong> button writes a coordinated checkpoint to the processed database.</p>
+        <div class="workflow"><div>CaImAn / Minian</div><div>Raw HDF5</div><div>In-memory workspace</div><div>Processed HDF5 + matches</div></div>
+        <div class="grid three">
+          <div class="card"><h3>Raw Preview</h3><p>Use it for comparison. Cleaning, merges, alignment and matching are intended for the working copy, not the raw source.</p></div>
+          <div class="card"><h3>Working Copy</h3><p>All tabs read the same in-memory cell and alignment state. Changing tabs does not require an intermediate disk write.</p></div>
+          <div class="card"><h3>Save checkpoint</h3><p>Persists cleaning, merges, alignments and cell matching together. Undo/redo history is cleared only after a successful checkpoint.</p></div>
+        </div>
+        <div class="note safe"><strong>Safety rule:</strong> keep an untouched raw database. If a raw file is selected, the dashboard establishes or uses a sibling processed file before a mutating save.</div>
+      </section>
+
+      <section id="quick-start">
+        <div class="eyebrow">Recommended order</div><h2>Quick start</h2>
+        <div class="card">
+          <div class="step"><span class="step-num">1</span><div><strong>Open a database.</strong><p>Click <strong>Browse</strong> and choose the database built by the Database Builder. Select <strong>Working Copy</strong> for normal work.</p></div></div>
+          <div class="step"><span class="step-num">2</span><div><strong>Select a cohort, then an animal.</strong><p>The animal list is restricted to the selected cohort. This cohort/animal pair scopes the workspace.</p></div></div>
+          <div class="step"><span class="step-num">3</span><div><strong>Clean each session and inspect Overview.</strong><p>Remove artifacts and merge duplicated detections before alignment and matching.</p></div></div>
+          <div class="step"><span class="step-num">4</span><div><strong>Align sessions.</strong><p>Choose a reference, test Direct or Sequential alignment, review MIP and footprint NCC, and make small manual corrections if needed.</p></div></div>
+          <div class="step"><span class="step-num">5</span><div><strong>Match cells across all sessions.</strong><p>Tune thresholds, inspect coverage and distributions, resolve intrasession conflicts, then rerun matching when necessary.</p></div></div>
+          <div class="step"><span class="step-num">6</span><div><strong>Save once satisfied.</strong><p>The header checkpoint saves the cross-tab state. Until then, use undo/redo freely.</p></div></div>
+        </div>
+      </section>
+
+      <section id="header">
+        <div class="eyebrow">Shared controls</div><h2>Header, selection and history</h2>
+        <div class="table-wrap"><table><thead><tr><th>Control</th><th>What it does</th><th>Practical note</th></tr></thead><tbody>
+          <tr><td><strong>Cohort</strong></td><td>Changes the active cohort and refreshes the animal selector.</td><td>Only animals in that cohort are shown.</td></tr>
+          <tr><td><strong>Animal</strong></td><td>Loads its ordered sessions and initializes the shared workspace.</td><td>Changing animal changes the scope of all tabs.</td></tr>
+          <tr><td><strong>View</strong></td><td>Switches between Working Copy and Raw Preview.</td><td>Use Raw Preview as a visual reference.</td></tr>
+          <tr><td><strong>Undo / Redo</strong></td><td>Reverses or reapplies cleaning, merges, alignment changes and matching edits.</td><td><code>Ctrl+Z</code> undoes; <code>Ctrl+Y</code> or <code>Ctrl+Shift+Z</code> redoes.</td></tr>
+          <tr><td><strong>Save</strong></td><td>Creates one disk checkpoint for all pending domains.</td><td>The Saved/Unsaved indicator reflects the shared workspace.</td></tr>
+          <tr><td><strong>Browse</strong></td><td>Selects another database file on the machine running the backend.</td><td>Finish or intentionally discard pending changes first.</td></tr>
+        </tbody></table></div>
+        <div class="note warn"><strong>Undo is memory-local.</strong> Closing or restarting the backend loses unsaved history. Save a checkpoint before ending a work session.</div>
+      </section>
+
+      <section id="cleaning">
+        <div class="eyebrow">Tab 1</div><h2>Cell Cleaning & Merging</h2>
+        <p class="section-lead">This tab removes artifact components and combines multiple detections that represent one biological cell. Changes are reflected in alignment and matching immediately.</p>
+        <div class="grid">
+          <div class="card"><h3>Individual session</h3><p>Select a session in the left list when an operation should affect only that session. Pairwise traces and metrics also have the clearest interpretation here.</p></div>
+          <div class="card"><h3>Overview (all sessions)</h3><p>Select Overview to display the sessions in their current aligned coordinates. A selection can include components from many sessions; each edit is routed back to the owning session.</p></div>
+        </div>
+        <h3>Selecting cells</h3>
+        <ul><li><strong>Left-click</strong> a footprint to select it; use the on-canvas instructions for multi-selection and ellipse selection.</li><li><strong>Scroll</strong> to zoom and <strong>right-drag</strong> to pan. Zoom and pan can be synchronized with the MIP.</li><li>When exactly two cells are selected, inspect centroid distance, temporal correlation and temporal traces before merging.</li></ul>
+        <h3>Actions</h3>
+        <div class="table-wrap"><table><thead><tr><th>Action</th><th>Effect</th><th>Best use</th></tr></thead><tbody>
+          <tr><td>Discard Selected</td><td>Removes selected components from the working state.</td><td>Known artifacts.</td></tr>
+          <tr><td>Discard Unselected</td><td>Keeps the selection and removes everything else in scope.</td><td>Small, confidently selected groups; review carefully.</td></tr>
+          <tr><td>Merge Selected</td><td>Combines selected components and their traces within each session.</td><td>Split detections of one cell.</td></tr>
+          <tr><td>Auto-merge Duplicates</td><td>Finds groups that jointly meet distance, temporal-correlation and spatial-overlap thresholds.</td><td>Screening many likely duplicates, followed by review.</td></tr>
+          <tr><td>Pairwise Distributions</td><td>Computes pairwise distance, temporal correlation and overlap distributions for the current scope.</td><td>Choosing thresholds based on the data.</td></tr>
+        </tbody></table></div>
+        <div class="note"><strong>Overview performance:</strong> it loads aggregate display matrices and keeps cell ownership metadata instead of treating the overview as a new session. For the snappiest review, use an individual session for trace-heavy work and Overview for cross-session spatial screening.</div>
+      </section>
+
+      <section id="alignment">
+        <div class="eyebrow">Tab 2</div><h2>Session Alignment</h2>
+        <p class="section-lead">Alignment puts every field of view into a common coordinate system. Use the MIP and summed spatial footprints as complementary evidence: a high score in one view does not always imply a biologically good registration.</p>
+        <h3>Direct versus Sequential</h3>
+        <div class="grid">
+          <div class="card"><h3>Direct to Reference</h3><p>Every target session is registered independently to one reference session.</p><p><strong>Use when:</strong> fields of view are already similar, or when you want simple, independent transforms with no propagated error.</p></div>
+          <div class="card"><h3>Sequential (neighbour)</h3><p>The algorithm crawls outward from the selected root. Each session is registered to its adjacent session, because nearby sessions usually share more structure.</p><p><strong>Use when:</strong> early and late sessions differ too much for reliable direct registration.</p></div>
+        </div>
+        <div class="note"><strong>Sequential interpretation:</strong> the displayed comparison and per-step NCC use the neighbouring session that the target was mapped to. The stored accumulated transform still places the target in the root session’s global coordinate frame.</div>
+        <h3>Recommended procedure</h3>
+        <ol><li>Put sessions in chronological or biologically meaningful order using the arrows in the session list.</li><li>Choose a stable, representative <strong>Reference Session</strong>. In Sequential mode this is the crawl root.</li><li>Start with <strong>Translation-only</strong> and <strong>MIP</strong>. Add rotation or scaling only when the images demonstrate that they are needed.</li><li>Run alignment in Overview to process all sessions, then inspect difficult sessions individually.</li><li>Compare <strong>MIP NCC</strong> and <strong>SF NCC</strong>, plus the actual before/after images. NCC is a guide, not the final decision.</li><li>Use manual arrow, rotation and scale nudges for small corrections. These edits are undoable.</li></ol>
+        <h3>Alignment modes and controls</h3>
+        <div class="table-wrap"><table><thead><tr><th>Control</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td>Translation-only (Rigid)</td><td>Horizontal/vertical shift. Fastest and least likely to overfit.</td></tr><tr><td>Rigid (Rotations)</td><td>Translation plus rotation.</td></tr><tr><td>Similarity (Scaling)</td><td>Translation, rotation and uniform scale.</td></tr><tr><td>Non-rigid (Deformable)</td><td>Local deformation for cases where a global transform is insufficient; use cautiously.</td></tr>
+          <tr><td>Source image</td><td><strong>MIP</strong> emphasizes anatomy/background; <strong>Footprints Sum</strong> emphasizes detected components.</td></tr><tr><td>Nudge step</td><td>Controls manual translation increment. Start at 1 px for final tuning.</td></tr><tr><td>Reset</td><td>Returns the current target alignment toward its unmodified state; the workspace history can also undo the action.</td></tr>
+        </tbody></table></div>
+        <h3>Grid search and results table</h3>
+        <p>Open <strong>Parameters</strong> to choose combinations of mode, strategy, source and reference. Grid-search results are stored per session (or Overview) and can be sorted and filtered. Important columns are:</p>
+        <p><span class="badge">MIP NCC</span><span class="badge">SF NCC</span><span class="badge">Displacement</span><span class="badge">Accumulated dx/dy/rotation/scale</span><span class="badge">Relative dx/dy</span></p>
+        <p><strong>Relative</strong> values describe the current registration step. <strong>Accumulated</strong> values describe the final transform into the common reference frame—especially important in Sequential mode.</p>
+      </section>
+
+      <section id="matching">
+        <div class="eyebrow">Tab 3</div><h2>Multi-Session Cell Matching</h2>
+        <p class="section-lead">Matching is deliberately an Overview/all-session workflow. There is no session list in this tab: every ordered session for the selected cohort and animal participates.</p>
+        <h3>Core parameters</h3>
+        <div class="table-wrap"><table><thead><tr><th>Parameter</th><th>What it controls</th><th>Tuning effect</th></tr></thead><tbody>
+          <tr><td>Max Distance Limit</td><td>Maximum centroid displacement considered for a candidate association.</td><td>Lower is stricter; higher admits more distant candidates.</td></tr>
+          <tr><td>Min Spatial Overlap</td><td>Required similarity/overlap between aligned spatial footprints.</td><td>Higher is stricter and may reduce false matches.</td></tr>
+          <tr><td>Cost Weight (Dist/Overlap)</td><td>Balances normalized centroid distance against footprint mismatch.</td><td>Move toward the feature that is more reliable in your preparation.</td></tr>
+          <tr><td>Overlap Metric</td><td>Cosine similarity uses continuous footprint intensity; Jaccard uses binary intersection-over-union.</td><td>Cosine retains shape/intensity detail; Jaccard emphasizes shared support.</td></tr>
+          <tr><td>Target Master Cells</td><td>Target used by parameter optimization.</td><td>Choose a biologically plausible order of magnitude, not an exact truth.</td></tr>
+        </tbody></table></div>
+        <h3>Reading the result</h3>
+        <ul><li><strong>Total</strong> is the number of master tracks. <strong>Matched</strong> tracks appear in at least two sessions; <strong>Unmatched</strong> tracks appear in only one.</li><li><strong>Multi-session coverage</strong> is the percentage of master tracks present in at least two sessions. The optimizer log reports this alongside its score and thresholds.</li><li>The <strong>presence heatmap</strong> shows sessions by master-cell row. Select a row to inspect its footprints and centroid path.</li><li><strong>Centroid Distance: Matched Cells vs All Other Cells</strong> and <strong>Footprint Similarity: Matched Cells vs All Other Cells</strong> show how well the solution separates accepted associations from alternatives.</li></ul>
+        <h3>Conflict review and intrasession merges</h3>
+        <p>When two master tracks contain likely duplicates in the same session, use <strong>Check it out</strong>. The conflict view selects both local cells and loads their temporal traces plus distance/correlation/overlap metrics. Apply a single merge or all reviewed merges, rerun matching, and verify that the track structure improves.</p>
+        <div class="note warn"><strong>Do not merge across biological sessions.</strong> A master track links identities across sessions. The actual footprint/trace merge occurs only between duplicated components inside the same session.</div>
+        <h3>Undoing a bad match</h3><p>Matching executions and merge commits enter the shared history. Press <code>Ctrl+Z</code> or use the header Undo button before saving. After undo, inspect counts, coverage, heatmap and distributions again.</p>
+        <h3>Deleting selected cell groups</h3><p>Select one or more master-cell rows in the Tracked Cell List and click <strong>Delete Selected Cell Groups</strong>. Every constituent cell in those groups is discarded from its owning session, remaining local indices are remapped, and matching counts, coverage, distributions and session badges update immediately. The operation stays in memory and can be undone until Save.</p>
+      </section>
+
+      <section id="builder">
+        <div class="eyebrow">Input preparation</div><h2>Database Builder</h2>
+        <p class="section-lead">The builder scans analysis folders, maps folder depths to the four database identity fields, validates arrays, and writes a chunked HDF5 database that the dashboard can open.</p>
+        <figure><img src="/frontend/images/docs-04-database-builder.png" alt="Database Builder four-step interface"><figcaption><strong>Database Builder.</strong> Choose an analysis folder and pipeline, discover/match the path structure, choose an output HDF5 file, then monitor the build log.</figcaption></figure>
+        <h3>Launch</h3><p>Run <code>db-builder</code>. The interface opens automatically at <code>http://127.0.0.1:8001</code>; use <code>db-builder --port PORT</code> if that port is occupied.</p>
+        <h3>Four-step build</h3>
+        <ol><li><strong>Select Analysis Folder & Type.</strong> Point to a representative <code>*-analysis</code> folder and choose CaImAn or Minian.</li><li><strong>Discover Path Structure.</strong> Map folder levels to <code>CohortName</code>, <code>MouseName</code>, <code>SessionType</code>, <code>SessionNumber</code>, Ignore, or Split. Supply global values when a field is not encoded in the path.</li><li><strong>Choose Output File.</strong> Select a portable <code>.h5</code> or MATLAB-v7.3-compatible file location. The code uses the chosen path; no laboratory-specific absolute path is embedded.</li><li><strong>Build.</strong> Review the live log. Duplicate destination mappings and invalid array shapes stop the affected build instead of silently overwriting ambiguous sessions.</li></ol>
+        <h3>Supported inputs</h3>
+        <div class="grid"><div class="card"><h3>CaImAn</h3><p>Reads <code>caiman_results.hdf5</code> from the newest date-stamped directory (or the analysis directory). Spatial <code>A</code> and temporal <code>C</code> are required. The MIP is recovered from available CaImAn image/background/movie sources, with footprint maximum as a last resort.</p></div><div class="card"><h3>Minian</h3><p>Reads <code>A.zarr</code>, <code>C.zarr</code> and <code>max_proj.zarr</code>, either directly below the newest run directory or its <code>data</code> subfolder.</p></div></div>
+        <h3>Storage choices</h3><p><span class="badge">float32 or float64</span><span class="badge">gzip, lzf or no compression</span><span class="badge">replace, skip or error on existing session</span></p>
+        <p>The builder writes sessions through a temporary group and swaps them into place only after the full session is valid. Existing content can therefore be preserved if a session write fails.</p>
+        <h3>Reusable mapping configurations</h3><p>Save a mapping configuration when multiple cohorts follow the same folder convention. Configurations are JSON and contain the path-depth rules, global values and build options; keep machine-specific root/output paths out of shared example configs.</p>
+      </section>
+
+      <section id="data-format">
+        <div class="eyebrow">On-disk contract</div><h2>HDF5 data format</h2>
+        <pre class="tree">Database/
+└── &lt;CohortName&gt;/
+    └── &lt;MouseName&gt;/
+        └── &lt;SessionType&gt;/
+            └── &lt;SessionNumber&gt;/
+                └── CalciumData/
+                    ├── SpatialFootprints   # N × width × height on disk
+                    ├── TemporalFootprints  # N × time
+                    └── MaxProjection       # width × height on disk</pre>
+        <p>The builder accepts loader arrays as spatial <code>(N,H,W)</code>, temporal <code>(N,T)</code>, and MIP <code>(H,W)</code>, validates matching cell/FOV dimensions, and transposes spatial images and MIP for the MATLAB-compatible on-disk convention.</p>
+        <div class="grid"><div class="card"><h3>Session attributes</h3><p>Source relative path, analysis type, MIP source, cell count and frame count document provenance.</p></div><div class="card"><h3>Database attributes</h3><p>Schema name/version, builder identity and last-build timestamp support future compatibility checks.</p></div></div>
+      </section>
+
+      <section id="code">
+        <div class="eyebrow">Developer section</div><h2>Code architecture</h2>
+        <p class="section-lead">The current architecture keeps the proven numerical pipeline intact while separating mutable UI state, persistence coordination, alignment models and data access.</p>
+        <h3>Dashboard backend: <code>dashboard_py/</code></h3>
+        <div class="table-wrap"><table><thead><tr><th>Module</th><th>Responsibility</th><th>Change with care</th></tr></thead><tbody>
+          <tr><td><code>main.py</code></td><td>FastAPI routes, request models, cache scoping, orchestration for cleaning/alignment/matching, and frontend serving.</td><td>Keep route payloads backward compatible with <code>frontend/index.html</code>.</td></tr>
+          <tr><td><code>database.py</code></td><td>HDF5/MATLAB-v7.3 reading, processed-file creation, session arrays, alignment persistence and matching outputs.</td><td>Preserve orientation conventions and raw/processed separation.</td></tr>
+          <tr><td><code>workspace.py</code></td><td>Shared in-memory session cells, alignment/matching domains, transactions, undo/redo and save snapshots.</td><td>All cross-tab mutations should be represented as one transaction with a clear label.</td></tr>
+          <tr><td><code>save_coordinator.py</code></td><td>Stages and commits cells, alignments and matching as one user checkpoint.</td><td>Only mark history saved after every required output succeeds.</td></tr>
+          <tr><td><code>alignment_models.py</code></td><td>Canonical transform representation and serialization helpers.</td><td>Use one transform convention at API, workspace and disk boundaries.</td></tr>
+          <tr><td><code>alignment.py</code></td><td>Image registration and warp calculations.</td><td>Characterize numerical output before algorithm changes.</td></tr>
+          <tr><td><code>matching.py</code></td><td>Cross-session candidate costs, assignment, track construction and matching metrics.</td><td>Threshold/metric changes can materially alter biological results.</td></tr>
+          <tr><td><code>frontend/index.html</code></td><td>Single-page interface, canvas interaction, charts, API calls and tab state.</td><td>Keep matching Overview-only; keep header history/save shared across tabs.</td></tr>
+        </tbody></table></div>
+        <h3>Database builder: <code>db_builder_py/</code></h3>
+        <div class="table-wrap"><table><thead><tr><th>Module</th><th>Responsibility</th></tr></thead><tbody>
+          <tr><td><code>main.py</code></td><td>Builder FastAPI UI, folder/file pickers, discovery/scan/build endpoints, background build status and configuration I/O.</td></tr>
+          <tr><td><code>builder.py</code></td><td>Session discovery, folder-depth mapping, collision validation, HDF5 chunking/compression and atomic session publication.</td></tr>
+          <tr><td><code>loader.py</code></td><td>Normalizes CaImAn and Minian outputs into the common spatial/temporal/MIP array contract.</td></tr>
+          <tr><td><code>config.py</code></td><td>Portable JSON configuration load/save.</td></tr>
+          <tr><td><code>frontend/index.html</code></td><td>Four-step discovery, mapping, output and progress interface.</td></tr>
+        </tbody></table></div>
+        <h3>Runtime data flow</h3>
+        <pre>Browser action
+  → FastAPI route in main.py
+  → workspace transaction (in-memory source of current truth)
+  → cache invalidation / derived alignment or matching calculation
+  → JSON response and canvas/chart rerender
+  → header Save
+  → SaveCoordinator snapshot
+  → processed HDF5 + matching result file</pre>
+        <h3>Safe extension pattern</h3>
+        <ol><li>Add or reuse a small request/response contract.</li><li>Load only the requested cohort/animal/session arrays.</li><li>Perform the mutation inside a workspace transaction and name it for Undo.</li><li>Invalidate only derived caches affected by that domain.</li><li>Render from the returned/current workspace state.</li><li>Add a characterization or regression test before changing numerical behavior.</li></ol>
+      </section>
+
+      <section id="api">
+        <div class="eyebrow">Developer reference</div><h2>Key API groups</h2>
+        <div class="grid">
+          <div class="card"><h3>Database & scope</h3><p><code>/api/metadata</code><br><code>/api/load-database</code><br><code>/api/set-db-type</code><br><code>/api/mouse/{mouse}/sessions</code></p></div>
+          <div class="card"><h3>Shared workspace</h3><p><code>/api/workspace/status</code><br><code>/api/workspace/view-state</code><br><code>/api/workspace/undo</code><br><code>/api/workspace/redo</code><br><code>/api/workspace/save</code></p></div>
+          <div class="card"><h3>Cleaning</h3><p><code>/api/clean-cells</code><br><code>/api/merge-cells</code><br><code>/api/automerge-sessions</code><br><code>/api/pairwise-stats</code></p></div>
+          <div class="card"><h3>Alignment</h3><p><code>/api/run-alignment</code><br><code>/api/compute-ncc</code><br><code>/api/run-grid-search</code><br><code>/api/update-alignment-cache</code></p></div>
+          <div class="card"><h3>Matching</h3><p><code>/api/run-matching</code><br><code>/api/optimize-matching</code><br><code>/api/matching-collisions</code><br><code>/api/commit-matching-merges</code></p></div>
+          <div class="card"><h3>Builder</h3><p><code>/api/discover</code><br><code>/api/preview-regex</code><br><code>/api/scan</code><br><code>/api/build</code><br><code>/api/build-status</code></p></div>
+        </div>
+        <div class="note"><strong>Preferred persistence endpoint:</strong> new frontend work should use <code>/api/workspace/save</code> for the coordinated checkpoint. Older domain-specific save routes remain compatibility surfaces and should not be the default UI path.</div>
+      </section>
+
+      <section id="performance">
+        <div class="eyebrow">Keeping the UI responsive</div><h2>Performance and memory notes</h2>
+        <ul><li><strong>Session-local loading:</strong> temporal traces and full arrays should be requested for the active session/cells, not for every session in advance.</li><li><strong>Overview aggregates:</strong> use combined display matrices and ownership indices; avoid duplicating complete session data solely for rendering.</li><li><strong>Shared cache scope:</strong> cohort and animal must be part of cache keys to prevent stale cross-cohort results.</li><li><strong>Debounced NCC:</strong> manual alignment nudges schedule NCC asynchronously so canvas movement stays responsive.</li><li><strong>Targeted invalidation:</strong> a cell merge invalidates matching for that animal, while unrelated cached sessions remain reusable.</li><li><strong>Chunked HDF5:</strong> spatial footprints are chunked by cell and images are compressed, supporting partial access and smaller portable files.</li><li><strong>One save:</strong> in-memory editing avoids repeated network-drive HDF5 rewrites between tabs.</li></ul>
+      </section>
+
+      <section id="troubleshooting">
+        <div class="eyebrow">Common problems</div><h2>Troubleshooting</h2>
+        <details><summary>The cohort has no animals</summary><div><p>Confirm that the selected database contains <code>Database/&lt;cohort&gt;/&lt;animal&gt;</code>. Switch cohort and reselect the database if needed. The animal menu intentionally filters by cohort.</p></div></details>
+        <details><summary>Sequential NCC or comparison looks wrong</summary><div><p>Confirm session order first. Sequential mode compares a target to its crawl neighbour for visualization and step NCC, while accumulated transforms remain anchored to the chosen root.</p></div></details>
+        <details><summary>Temporal traces do not appear in a conflict</summary><div><p>Open <strong>Check it out</strong> from an intrasession conflict and ensure two local cells are selected. The trace endpoint requires the owning cohort, animal, session type, session name and both cell indices.</p></div></details>
+        <details><summary>Save is disabled</summary><div><p>No workspace mutation is pending, or no cohort/animal working scope is active. Make a working-copy edit and check the Unsaved indicator.</p></div></details>
+        <details><summary>A build finds no sessions</summary><div><p>Verify the selected pipeline and folder suffix, then inspect the discovered depth rules. CaImAn expects <code>caiman_results.hdf5</code>; Minian expects the three Zarr datasets.</p></div></details>
+        <details><summary>A build reports duplicate destinations</summary><div><p>Two source folders mapped to the same cohort/animal/session-type/session-number key. Correct the depth mapping or split rule; do not suppress the collision.</p></div></details>
+        <details><summary>The app is slow on a network share</summary><div><p>Keep intermediate edits in memory, use individual-session trace views, prefer float32/compression where precision policy permits, and avoid repeated disk checkpoints during exploration.</p></div></details>
+      </section>
+
+      <section id="glossary">
+        <div class="eyebrow">Terminology</div><h2>Glossary</h2>
+        <div class="table-wrap"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td>Spatial footprint (SF)</td><td>Per-pixel spatial weight/image for a detected component.</td></tr><tr><td>Temporal footprint / trace</td><td>Activity value of a component over frames.</td></tr><tr><td>MIP</td><td>Maximum intensity projection used as an anatomical/background alignment source.</td></tr><tr><td>NCC</td><td>Normalized cross-correlation; an image-similarity diagnostic for alignment.</td></tr><tr><td>Intrasession merge</td><td>Combining duplicate components inside one session.</td></tr><tr><td>Intersession match</td><td>Linking corresponding cells across different sessions without merging their raw traces.</td></tr><tr><td>Master cell / track</td><td>One longitudinal identity with zero or one component per session after conflicts are resolved.</td></tr><tr><td>Coverage</td><td>Percentage of master tracks present in at least two sessions.</td></tr><tr><td>Overview</td><td>Combined all-session representation in the current aligned coordinate frame.</td></tr>
+        </tbody></table></div>
+      </section>
+    </main>
+  </div>
+  <footer class="footer">Calcium Imaging Dashboard · Documentation is served locally with the dashboard and contains no machine-specific data paths.</footer>
+</body>
+</html>

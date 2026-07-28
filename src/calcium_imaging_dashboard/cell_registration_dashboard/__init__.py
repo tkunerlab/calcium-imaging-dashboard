@@ -1,0 +1,1 @@
+"""Cell registration dashboard application."""

@@ -1,0 +1,7 @@
+include CHANGELOG.md
+include CITATION.cff
+include THIRD_PARTY_NOTICES.md
+include install-windows.bat
+include install-linux.sh
+include install-macos.command
+recursive-include tests *.py

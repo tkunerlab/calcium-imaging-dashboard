@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Calcium Imaging Dashboard"
+type: software
+authors:
+  - family-names: "Adlakha"
+    given-names: "Avi"
+version: 0.1.0
+date-released: 2026-07-28
+license: BSD-3-Clause

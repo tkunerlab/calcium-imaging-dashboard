@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Calcium Imaging Database Builder</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-0:    #0e1117;
+    --bg-1:    #161b24;
+    --bg-2:    #1e2535;
+    --bg-3:    #263044;
+    --border:  #2e3a50;
+    --accent:  #4f9cf9;
+    --accent2: #7b61ff;
+    --success: #3dd68c;
+    --warn:    #f5a623;
+    --error:   #f25a5a;
+    --text:    #e2e8f0;
+    --text-2:  #94a3b8;
+    --text-3:  #64748b;
+    --radius:  10px;
+    --shadow:  0 4px 24px rgba(0,0,0,.45);
+    --font:    system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  html { font-size: 14px; }
+  body {
+    font-family: var(--font);
+    background: var(--bg-0);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ───────────────────────────────────────────────────────── */
+  header {
+    background: linear-gradient(135deg, #1a2540 0%, #0e1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  header .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 600; color: var(--text); }
+  header .subtitle { color: var(--text-2); font-size: .82rem; margin-top: 2px; }
+  header .spacer { flex: 1; }
+  header .badge {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: .78rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Layout ───────────────────────────────────────────────────────── */
+  main {
+    flex: 1;
+    padding: 28px 32px;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ── Step cards ───────────────────────────────────────────────────── */
+  .step-card {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: box-shadow .2s;
+  }
+  .step-card:hover { box-shadow: 0 0 0 1px var(--accent)22; }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+  .step-header .num {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: .85rem; color: #fff;
+    flex-shrink: 0;
+  }
+  .step-header .num.done { background: var(--success); }
+  .step-header h2 { font-size: 1rem; font-weight: 600; }
+  .step-header .step-sub { color: var(--text-2); font-size: .8rem; margin-top: 2px; }
+  .step-header .chevron {
+    margin-left: auto;
+    color: var(--text-3);
+    transition: transform .2s;
+    font-size: 1.1rem;
+  }
+  .step-card.collapsed .chevron { transform: rotate(-90deg); }
+
+  .step-body { padding: 20px; }
+  .step-card.collapsed .step-body { display: none; }
+
+  /* ── Form elements ────────────────────────────────────────────────── */
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .field-row + .field-row { margin-top: 14px; }
+
+  label { font-size: .82rem; color: var(--text-2); font-weight: 500; white-space: nowrap; }
+
+  input[type=text], input[type=number], select, textarea {
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: var(--font);
+    font-size: .88rem;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent)33;
+  }
+  input[type=text] { flex: 1; min-width: 200px; }
+  select { min-width: 160px; cursor: pointer; }
+  textarea {
+    width: 100%; resize: vertical;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .82rem;
+    min-height: 220px;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────── */
+  .btn {
+    padding: 8px 18px;
+    border: none; border-radius: 6px;
+    font-family: var(--font); font-size: .85rem; font-weight: 500;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s, box-shadow .15s;
+    white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #3a7de0);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--accent)55;
+  }
+  .btn-primary:not(:disabled):hover { opacity: .88; box-shadow: 0 4px 16px var(--accent)66; }
+
+  .btn-success {
+    background: linear-gradient(135deg, var(--success), #2aaf74);
+    color: #fff;
+    box-shadow: 0 2px 8px var(--success)55;
+  }
+  .btn-success:not(:disabled):hover { opacity: .88; }
+
+  .btn-ghost {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+  }
+  .btn-ghost:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-warn {
+    background: linear-gradient(135deg, var(--warn), #d48a1c);
+    color: #fff;
+  }
+  .btn-warn:not(:disabled):hover { opacity: .88; }
+
+  .btn-sm { padding: 5px 12px; font-size: .78rem; }
+
+  /* ── Analysis type pills ──────────────────────────────────────────── */
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    padding: 6px 16px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--bg-2);
+    color: var(--text-2);
+    cursor: pointer;
+    font-size: .82rem;
+    font-weight: 500;
+    transition: all .15s;
+  }
+  .pill:hover { border-color: var(--accent); color: var(--accent); }
+  .pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pill.disabled { opacity: .38; cursor: not-allowed; }
+
+  /* ── Depth table ──────────────────────────────────────────────────── */
+  .depth-table { width: 100%; border-collapse: collapse; }
+  .depth-table th {
+    text-align: left;
+    color: var(--text-3);
+    font-size: .76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .depth-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border)66;
+    vertical-align: middle;
+  }
+  .depth-table tr:last-child td { border-bottom: none; }
+  .depth-table tr.root-row td { background: var(--bg-3); }
+  .depth-table tr.ignored-row td { opacity: .45; }
+
+  .folder-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    color: var(--text);
+    background: var(--bg-3);
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+
+  .regex-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .regex-row input[type=text] { font-family: 'JetBrains Mono', monospace; font-size: .78rem; }
+  .regex-preview {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .76rem;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+  .regex-preview.ok   { background: var(--success)22; color: var(--success); border: 1px solid var(--success)44; }
+  .regex-preview.fail { background: var(--error)22;   color: var(--error);   border: 1px solid var(--error)44; }
+
+  /* ── Global overrides ─────────────────────────────────────────────── */
+  .global-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .global-field { display: flex; flex-direction: column; gap: 6px; }
+  .global-field label { font-size: .8rem; }
+  .global-field .covered {
+    font-size: .76rem;
+    color: var(--success);
+    margin-top: 2px;
+  }
+
+  /* ── Session preview table ────────────────────────────────────────── */
+  .preview-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .preview-table th {
+    text-align: left;
+    color: var(--text-3);
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .preview-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border)44;
+    font-size: .82rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .preview-table tr.ok-row td:first-child { color: var(--success); }
+  .preview-table tr.warn-row td:first-child { color: var(--warn); }
+  .preview-table tr.warn-row { opacity: .7; }
+
+  /* ── Log panel ─────────────────────────────────────────────────────── */
+  .log-panel {
+    background: #080c12;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    line-height: 1.7;
+    min-height: 160px;
+    max-height: 420px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .log-panel .log-ok   { color: var(--success); }
+  .log-panel .log-warn { color: var(--warn); }
+  .log-panel .log-err  { color: var(--error); }
+  .log-panel .log-info { color: var(--accent); }
+  .log-panel .log-dim  { color: var(--text-3); }
+
+  /* ── Status bar ───────────────────────────────────────────────────── */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: .82rem;
+  }
+  .status-bar .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-3);
+    flex-shrink: 0;
+  }
+  .status-bar .dot.running { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  .status-bar .dot.success { background: var(--success); }
+  .status-bar .dot.error   { background: var(--error); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: .3; }
+  }
+
+  /* ── Divider ──────────────────────────────────────────────────────── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+  /* ── Info / alert box ─────────────────────────────────────────────── */
+  .info-box {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: .82rem;
+    border-left: 3px solid;
+    margin: 10px 0;
+  }
+  .info-box.info   { background: var(--accent)11; border-color: var(--accent); color: var(--text-2); }
+  .info-box.warn   { background: var(--warn)11;   border-color: var(--warn);   color: var(--warn); }
+  .info-box.success{ background: var(--success)11;border-color: var(--success);color: var(--success); }
+
+  /* ── Root selector ────────────────────────────────────────────────── */
+  .path-crumbs {
+    display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+    margin: 10px 0;
+    padding: 10px 14px;
+    background: var(--bg-0);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .crumb {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .78rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .12s;
+    color: var(--text-2);
+  }
+  .crumb:hover { border-color: var(--accent); color: var(--accent); }
+  .crumb.root-mark { border-color: var(--success); color: var(--success); background: var(--success)15; }
+  .crumb.ignored { color: var(--text-3); text-decoration: line-through; }
+  .crumb-sep { color: var(--text-3); font-size: .8rem; }
+
+  /* ── Scrollbar ─────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-0); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+  /* ── Spinner ──────────────────────────────────────────────────────── */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Tooltip ──────────────────────────────────────────────────────── */
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%; transform: translateX(-50%);
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: .74rem;
+    padding: 5px 10px;
+    border-radius: 5px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 200;
+  }
+  [data-tip]:hover::after { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🗄</div>
+  <div>
+    <h1>Calcium Imaging Database Builder</h1>
+    <div class="subtitle">Build HDF5 calcium imaging databases from analysis output folders</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="badge" id="portBadge">localhost:8001</div>
+</header>
+
+<main>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       STEP 1 — Analysis folder & type
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="step-card" id="card1">
+    <div class="step-header" onclick="toggleCard('card1')">
+      <div class="num" id="num1">1</div>
+      <div>
+        <h2>Select Analysis Folder &amp; Type</h2>
+        <div class="step-sub">Point to a <code>*-analysis</code> folder and choose the pipeline</div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="step-body">
+
+      <div class="field-row">
+        <label>Analysis folder</label>
+        <input type="text" id="analysisFolder" placeholder="e.g. Z:/Data/Mouse56/Session01/caiman-analysis" />
+        <button class="btn btn-ghost" onclick="browseAnalysisFolder()">📂 Browse…</button>
+      </div>
+
+      <div class="field-row" style="margin-top:14px;">
+        <label>Pipeline</label>
+        <div class="pills">
+          <div class="pill active" id="pill-caiman"    onclick="selectPipeline('caiman-analysis')">CaImAn</div>
+          <div class="pill"        id="pill-minian"    onclick="selectPipeline('minian-analysis')">Minian</div>
+          <div class="pill disabled" data-tip="Coming soon">Cascade</div>
+          <div class="pill disabled" data-tip="Coming soon">MIN1PIPE</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+        <button class="btn btn-primary" id="discoverBtn" onclick="doDiscover()">🔍 Discover Path Structure</button>
+        <div id="discoverSpinner" style="display:none;"><div class="spinner"></div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       STEP 2 — Depth mapping
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="step-card collapsed" id="card2">
+    <div class="step-header" onclick="toggleCard('card2')">
+      <div class="num" id="num2">2</div>
+      <div>
+        <h2>Map Path Depths to Database Fields</h2>
+        <div class="step-sub">Label each folder level: Cohort, Mouse, Session Type, Session Number, or Ignore</div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="step-body">
+
+      <div class="info-box info" id="rootInfo" style="display:none;"></div>
+
+      <!-- Path breadcrumbs / root picker -->
+      <div style="margin-bottom:10px;">
+        <label style="display:block;margin-bottom:6px;">
+          Click a folder to set it as the <strong>hierarchy root</strong>
+          (everything above it will be ignored):
+        </label>
+        <div class="path-crumbs" id="pathCrumbs"></div>
+      </div>
+
+      <hr/>
+
+      <!-- Depth rows table -->
+      <div id="depthTableWrap" style="overflow-x:auto;">
+        <table class="depth-table">
+          <thead>
+            <tr>
+              <th style="width:28px;">#</th>
+              <th>Folder name</th>
+              <th style="width:200px;">Role</th>
+              <th>Regex split</th>
+            </tr>
+          </thead>
+          <tbody id="depthTableBody"></tbody>
+        </table>
+      </div>
+
+      <hr/>
+
+      <!-- Global overrides -->
+      <div style="font-size:.85rem;font-weight:600;margin-bottom:4px;">
+        🔒 Global Overrides
+        <span style="font-weight:400;color:var(--text-2);font-size:.78rem;">
+          — fill any field not covered by a depth label
+        </span>
+      </div>
+      <div class="global-grid" id="globalGrid"></div>
+
+      <hr/>
+
+      <!-- Config save / load + Scan preview -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-ghost btn-sm" onclick="doSaveConfig()">💾 Save Config…</button>
+        <button class="btn btn-ghost btn-sm" onclick="doLoadConfig()">📂 Load Config…</button>
+        <div style="flex:1;"></div>
+        <button class="btn btn-primary" id="scanBtn" onclick="doScan()">👁 Preview Sessions</button>
+      </div>
+
+      <!-- Preview table -->
+      <div id="scanPreviewWrap" style="display:none;margin-top:14px;overflow-x:auto;">
+        <table class="preview-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Path</th>
+              <th>Cohort</th>
+              <th>Mouse</th>
+              <th>Session Type</th>
+              <th>Session #</th>
+            </tr>
+          </thead>
+          <tbody id="scanPreviewBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       STEP 3 — Output path
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="step-card collapsed" id="card3">
+    <div class="step-header" onclick="toggleCard('card3')">
+      <div class="num" id="num3">3</div>
+      <div>
+        <h2>Choose Output File</h2>
+        <div class="step-sub">Select where to save the HDF5 database</div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="step-body">
+
+      <div class="field-row">
+        <label>Output .h5 file</label>
+        <input type="text" id="outputPath" placeholder="e.g. /path/to/Database.h5" />
+        <button class="btn btn-ghost" onclick="browseOutputFile()">📂 Browse…</button>
+      </div>
+
+      <div class="field-row" style="margin-top:12px;flex-wrap:wrap;">
+        <label>Storage</label>
+        <select id="outputPrecision" title="float32 is smaller; float64 preserves existing output precision">
+          <option value="float64" selected>float64 (compatible)</option>
+          <option value="float32">float32 (smaller)</option>
+        </select>
+        <select id="outputCompression" title="HDF5 compression">
+          <option value="gzip" selected>gzip compression</option>
+          <option value="lzf">LZF compression</option>
+          <option value="none">No compression</option>
+        </select>
+        <input id="outputCompressionLevel" type="number" value="4" min="0" max="9" style="max-width:90px;" title="gzip compression level" />
+        <select id="outputAppendPolicy" title="Behavior when a session already exists">
+          <option value="replace" selected>Replace sessions</option>
+          <option value="skip">Skip existing</option>
+          <option value="error">Stop on existing</option>
+        </select>
+      </div>
+
+      <div class="info-box warn" style="margin-top:12px;">
+        ⚠ Existing sessions in the target file will be <strong>overwritten</strong>.
+        New sessions will be appended.
+      </div>
+
+      <div style="margin-top:16px;">
+        <button class="btn btn-success" id="buildBtn" onclick="doBuild()">🔨 Build Database</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       STEP 4 — Progress log
+  ══════════════════════════════════════════════════════════════ -->
+  <div class="step-card" id="card4">
+    <div class="step-header" onclick="toggleCard('card4')">
+      <div class="num" id="num4">4</div>
+      <div>
+        <h2>Build Progress</h2>
+        <div class="step-sub">Live log output during database construction</div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="step-body">
+
+      <div class="status-bar" id="statusBar">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Waiting for build…</span>
+      </div>
+
+      <div class="log-panel" id="logPanel" style="margin-top:12px;">
+        <span class="log-dim">Build output will appear here once you click "Build Database".</span>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   State
+════════════════════════════════════════════════════════════════════ */
+let state = {
+  allParts:       [],   // all path parts from drive root
+  rootIndex:      0,    // index into allParts where root starts (0 = drive)
+  depthRules:     [],   // one entry per depth below root (excl. -analysis itself)
+  analysisType:   'caiman-analysis',
+  pollInterval:   null,
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   Utility
+════════════════════════════════════════════════════════════════════ */
+function api(method, url, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  return fetch(url, opts).then(r => {
+    if (!r.ok) return r.json().then(e => Promise.reject(e.detail || 'API error'));
+    return r.json();
+  });
+}
+
+function toggleCard(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+function expandCard(id) {
+  document.getElementById(id).classList.remove('collapsed');
+}
+
+function collapseCard(id) {
+  document.getElementById(id).classList.add('collapsed');
+}
+
+function markDone(numId) {
+  document.getElementById(numId).classList.add('done');
+  document.getElementById(numId).textContent = '✓';
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 1 — Folder & pipeline
+════════════════════════════════════════════════════════════════════ */
+function selectPipeline(type) {
+  state.analysisType = type;
+  document.querySelectorAll('.pill:not(.disabled)').forEach(p => p.classList.remove('active'));
+  const map = { 'caiman-analysis': 'pill-caiman', 'minian-analysis': 'pill-minian' };
+  const el = document.getElementById(map[type]);
+  if (el) el.classList.add('active');
+}
+
+async function browseAnalysisFolder() {
+  const res = await api('GET', '/api/browse-folder?title=Select+-analysis+folder');
+  if (res.status === 'success') {
+    document.getElementById('analysisFolder').value = res.path;
+  }
+}
+
+async function doDiscover() {
+  const folder = document.getElementById('analysisFolder').value.trim();
+  if (!folder) { alert('Please enter or browse to an analysis folder first.'); return; }
+
+  document.getElementById('discoverSpinner').style.display = '';
+  document.getElementById('discoverBtn').disabled = true;
+
+  try {
+    const res = await api('POST', '/api/discover', {
+      analysis_folder: folder,
+      analysis_type:   state.analysisType,
+    });
+
+    state.allParts = res.all_parts;
+    state.rootIndex = 0;  // start at beginning; user will pick
+
+    renderCrumbs();
+    renderDepthTable();
+    renderGlobalGrid();
+
+    markDone('num1');
+    expandCard('card2');
+    collapseCard('card1');
+
+    document.getElementById('rootInfo').style.display = '';
+    document.getElementById('rootInfo').textContent =
+      `Discovered ${state.allParts.length} path levels. Click a folder name below to set it as the root of your hierarchy.`;
+
+  } catch (err) {
+    alert('Discovery failed:\n' + err);
+  } finally {
+    document.getElementById('discoverSpinner').style.display = 'none';
+    document.getElementById('discoverBtn').disabled = false;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 2 — Path crumbs & root picker
+════════════════════════════════════════════════════════════════════ */
+function renderCrumbs() {
+  const container = document.getElementById('pathCrumbs');
+  container.innerHTML = '';
+  state.allParts.forEach((part, i) => {
+    if (i > 0) {
+      const sep = document.createElement('span');
+      sep.className = 'crumb-sep';
+      sep.textContent = '/';
+      container.appendChild(sep);
+    }
+    const crumb = document.createElement('span');
+    crumb.className = 'crumb' + (i < state.rootIndex ? ' ignored' : '') + (i === state.rootIndex ? ' root-mark' : '');
+    crumb.textContent = part;
+    crumb.title = 'Set as root';
+    crumb.onclick = () => {
+      state.rootIndex = i;
+      renderCrumbs();
+      renderDepthTable();
+      renderGlobalGrid();
+    };
+    container.appendChild(crumb);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 2 — Depth table
+════════════════════════════════════════════════════════════════════ */
+const ROLE_OPTIONS = ['CohortName','MouseName','SessionType','SessionNumber','Ignore','Split'];
+
+function getActiveDepths() {
+  // rel_parts from the server are computed relative to root_path, so they
+  // do NOT include the root folder itself — only its children.
+  // We must skip allParts[rootIndex] (the root folder) and return everything below it.
+  return state.allParts.slice(state.rootIndex + 1);
+}
+
+function initDepthRules() {
+  const depths = getActiveDepths();
+  // Keep existing rules where they make sense
+  state.depthRules = depths.map((_, i) => state.depthRules[i] || {
+    label:        'Ignore',
+    split_regex:  '',
+    split_fields: ['SessionType','SessionNumber'],
+  });
+}
+
+function renderDepthTable() {
+  initDepthRules();
+  const depths = getActiveDepths();
+  const tbody = document.getElementById('depthTableBody');
+  tbody.innerHTML = '';
+
+  depths.forEach((part, i) => {
+    const rule = state.depthRules[i];
+    const tr = document.createElement('tr');
+    if (rule.label === 'Ignore') tr.className = 'ignored-row';
+    // No root-row highlighting needed since root is excluded from the table now
+
+    // # column
+    const tdIdx = document.createElement('td');
+    tdIdx.style.color = 'var(--text-3)';
+    tdIdx.style.fontSize = '.75rem';
+    tdIdx.textContent = i + 1;
+    tr.appendChild(tdIdx);
+
+    // Folder name
+    const tdName = document.createElement('td');
+    tdName.innerHTML = `<span class="folder-name">${escHtml(part)}</span>`;
+    tr.appendChild(tdName);
+
+    // Role dropdown
+    const tdRole = document.createElement('td');
+    const sel = document.createElement('select');
+    sel.style.width = '100%';
+    ROLE_OPTIONS.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      if (opt === rule.label) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => {
+      state.depthRules[i].label = sel.value;
+      renderDepthTable();
+      renderGlobalGrid();
+    };
+    tdRole.appendChild(sel);
+    tr.appendChild(tdRole);
+
+    // Regex column
+    const tdRegex = document.createElement('td');
+    if (rule.label === 'Split') {
+      tdRegex.appendChild(buildRegexCell(i, part));
+    } else {
+      tdRegex.innerHTML = `<span style="color:var(--text-3);font-size:.78rem;">—</span>`;
+    }
+    tr.appendChild(tdRegex);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function buildRegexCell(i, sample) {
+  const wrap = document.createElement('div');
+  const rule = state.depthRules[i];
+
+  // Pattern input
+  const patRow = document.createElement('div');
+  patRow.className = 'regex-row';
+  const patLabel = document.createElement('label');
+  patLabel.textContent = 'Pattern:';
+  patLabel.style.minWidth = '58px';
+  const patInput = document.createElement('input');
+  patInput.type = 'text';
+  patInput.placeholder = 'e.g. ^(.+?)_(Session\\d+)$';
+  patInput.value = rule.split_regex || '';
+  patInput.style.fontFamily = "'JetBrains Mono', monospace";
+  patInput.style.fontSize = '.78rem';
+  patInput.oninput = () => {
+    state.depthRules[i].split_regex = patInput.value;
+    testRegex();
+  };
+  patRow.appendChild(patLabel);
+  patRow.appendChild(patInput);
+  wrap.appendChild(patRow);
+
+  // Field labels for the two capture groups
+  const fieldsRow = document.createElement('div');
+  fieldsRow.className = 'regex-row';
+  fieldsRow.style.marginTop = '4px';
+  ['Group 1 →', 'Group 2 →'].forEach((lbl, gi) => {
+    const span = document.createElement('label');
+    span.textContent = lbl;
+    span.style.minWidth = '64px';
+    const sel = document.createElement('select');
+    ['CohortName','MouseName','SessionType','SessionNumber'].forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      if (opt === (rule.split_fields && rule.split_fields[gi])) o.selected = true;
+      sel.appendChild(o);
+    });
+    sel.onchange = () => {
+      if (!state.depthRules[i].split_fields) state.depthRules[i].split_fields = ['SessionType','SessionNumber'];
+      state.depthRules[i].split_fields[gi] = sel.value;
+    };
+    fieldsRow.appendChild(span);
+    fieldsRow.appendChild(sel);
+  });
+  wrap.appendChild(fieldsRow);
+
+  // Preview
+  const preview = document.createElement('div');
+  preview.className = 'regex-preview';
+  preview.id = `regexPreview_${i}`;
+  preview.textContent = 'Enter a pattern to test…';
+  wrap.appendChild(preview);
+
+  async function testRegex() {
+    const pattern = patInput.value.trim();
+    if (!pattern) {
+      preview.className = 'regex-preview';
+      preview.textContent = 'Enter a pattern to test…';
+      return;
+    }
+    try {
+      const res = await api('POST', '/api/preview-regex', { pattern, sample });
+      if (res.error) {
+        preview.className = 'regex-preview fail';
+        preview.textContent = '✗ Regex error: ' + res.error;
+      } else if (!res.matched) {
+        preview.className = 'regex-preview fail';
+        preview.textContent = `✗ No match on "${sample}"`;
+      } else {
+        preview.className = 'regex-preview ok';
+        preview.textContent = `✓ Groups: ${res.groups.map((g,gi) => `[${gi+1}]="${g}"`).join(', ')}`;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // Run test on initial render if pattern exists
+  if (rule.split_regex) { setTimeout(testRegex, 0); }
+
+  return wrap;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 2 — Global overrides
+════════════════════════════════════════════════════════════════════ */
+const REQUIRED_FIELDS = ['CohortName','MouseName','SessionType','SessionNumber'];
+
+function getCoveredFields() {
+  const covered = new Set();
+  state.depthRules.forEach(r => {
+    if (r.label && r.label !== 'Ignore' && r.label !== 'Split') covered.add(r.label);
+    if (r.label === 'Split' && r.split_fields) r.split_fields.forEach(f => covered.add(f));
+  });
+  return covered;
+}
+
+function renderGlobalGrid() {
+  const covered = getCoveredFields();
+  const grid = document.getElementById('globalGrid');
+  grid.innerHTML = '';
+
+  REQUIRED_FIELDS.forEach(field => {
+    const div = document.createElement('div');
+    div.className = 'global-field';
+    const label = document.createElement('label');
+    label.textContent = field;
+    div.appendChild(label);
+
+    if (covered.has(field)) {
+      const msg = document.createElement('div');
+      msg.className = 'covered';
+      msg.textContent = '✓ Covered by depth mapping';
+      div.appendChild(msg);
+    } else {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = `global_${field}`;
+      input.placeholder = `Fixed ${field} for all sessions`;
+      input.style.width = '100%';
+      div.appendChild(input);
+    }
+    grid.appendChild(div);
+  });
+}
+
+function getGlobalValues() {
+  const vals = {};
+  REQUIRED_FIELDS.forEach(f => {
+    const el = document.getElementById(`global_${f}`);
+    vals[f] = el ? el.value.trim() || null : null;
+  });
+  return vals;
+}
+
+function getRootPath() {
+  // rootIndex is the first depth in allParts that we consider as root.
+  // The actual root_path for discovery is allParts[0..rootIndex] joined.
+  const parts = state.allParts.slice(0, state.rootIndex + 1);
+  // On Windows: first part is e.g. "Z:\" so we join with /
+  let p = parts.join('/');
+  // Normalise double slashes except at protocol-like starts
+  p = p.replace(/([^:])\/\//g, '$1/');
+  return p;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 2 — Scan preview
+════════════════════════════════════════════════════════════════════ */
+async function doScan() {
+  const rootPath = getRootPath();
+
+  const depthRules = state.depthRules.map(r => ({
+    label:        r.label,
+    split_regex:  r.split_regex  || null,
+    split_fields: r.split_fields || null,
+  }));
+
+  document.getElementById('scanBtn').disabled = true;
+  try {
+    const res = await api('POST', '/api/scan', {
+      root_path:     rootPath,
+      analysis_type: state.analysisType,
+      depth_rules:   depthRules,
+      global_values: getGlobalValues(),
+    });
+
+    const tbody = document.getElementById('scanPreviewBody');
+    tbody.innerHTML = '';
+    res.sessions.forEach(s => {
+      const tr = document.createElement('tr');
+      tr.className = s.ok ? 'ok-row' : 'warn-row';
+      if (s.collision) tr.title = 'Duplicate HDF5 destination; adjust the mapping before building.';
+
+      const m = s.mapping || {};
+      tr.innerHTML = `
+        <td>${s.ok ? '✓' : '⚠'}</td>
+        <td style="font-size:.75rem;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+            title="${escHtml(s.rel_path)}">${escHtml(s.rel_path)}</td>
+        <td>${escHtml(m.CohortName  || '—')}</td>
+        <td>${escHtml(m.MouseName   || '—')}</td>
+        <td>${escHtml(m.SessionType || '—')}</td>
+        <td>${escHtml(m.SessionNumber|| '—')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('scanPreviewWrap').style.display = '';
+    markDone('num2');
+    expandCard('card3');
+  } catch (err) {
+    alert('Scan failed:\n' + err);
+  } finally {
+    document.getElementById('scanBtn').disabled = false;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 3 — Output path
+════════════════════════════════════════════════════════════════════ */
+async function browseOutputFile() {
+  const res = await api('GET', '/api/browse-save-file?title=Save+Database+As&default_ext=.h5');
+  if (res.status === 'success') {
+    document.getElementById('outputPath').value = res.path;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Step 3 — Build
+════════════════════════════════════════════════════════════════════ */
+async function doBuild() {
+  const output = document.getElementById('outputPath').value.trim();
+  if (!output) { alert('Please set an output file path first.'); return; }
+
+  const rootPath = getRootPath();
+
+  const depthRules = state.depthRules.map(r => ({
+    label:        r.label,
+    split_regex:  r.split_regex  || null,
+    split_fields: r.split_fields || null,
+  }));
+
+  document.getElementById('buildBtn').disabled = true;
+
+  // Reset log panel
+  const log = document.getElementById('logPanel');
+  log.innerHTML = '';
+  setStatus('running', 'Building database…');
+  expandCard('card4');
+
+  try {
+    await api('POST', '/api/build', {
+      root_path:     rootPath,
+      analysis_type: state.analysisType,
+      output_path:   output,
+      depth_rules:   depthRules,
+      global_values: getGlobalValues(),
+      precision: document.getElementById('outputPrecision').value,
+      compression: document.getElementById('outputCompression').value,
+      compression_level: Number(document.getElementById('outputCompressionLevel').value || 4),
+      append_policy: document.getElementById('outputAppendPolicy').value,
+    });
+
+    // Start polling
+    state.pollInterval = setInterval(pollBuild, 400);
+  } catch (err) {
+    appendLog('✗  Failed to start build: ' + err, 'log-err');
+    setStatus('error', 'Build failed to start');
+    document.getElementById('buildBtn').disabled = false;
+  }
+}
+
+async function pollBuild() {
+  try {
+    const res = await api('GET', '/api/build-status');
+    res.lines.forEach(line => {
+      const cls = line.startsWith('✓') ? 'log-ok'
+                : line.startsWith('⚠') ? 'log-warn'
+                : line.startsWith('✗') ? 'log-err'
+                : line.startsWith('🔍') || line.startsWith('🔨') ? 'log-info'
+                : '';
+      appendLog(line, cls);
+    });
+
+    if (res.done) {
+      clearInterval(state.pollInterval);
+      state.pollInterval = null;
+      document.getElementById('buildBtn').disabled = false;
+      markDone('num3');
+      markDone('num4');
+
+      if (res.success) {
+        setStatus('success', 'Build completed successfully ✓');
+      } else {
+        setStatus('error', 'Build finished with errors — see log above');
+      }
+    } else {
+      setStatus('running', 'Building database…');
+    }
+  } catch (err) {
+    appendLog('Poll error: ' + err, 'log-err');
+  }
+}
+
+function appendLog(text, cls = '') {
+  const log = document.getElementById('logPanel');
+  const span = document.createElement('span');
+  if (cls) span.className = cls;
+  span.textContent = text + '\n';
+  log.appendChild(span);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setStatus(state, text) {
+  const dot  = document.getElementById('statusDot');
+  const span = document.getElementById('statusText');
+  dot.className = 'dot ' + state;
+  span.textContent = text;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Config save / load
+════════════════════════════════════════════════════════════════════ */
+async function doSaveConfig() {
+  const res = await api('GET', '/api/browse-save-file?title=Save+Config&default_ext=.json');
+  if (res.status !== 'success') return;
+
+  const depthRules = state.depthRules.map(r => ({
+    label:        r.label,
+    split_regex:  r.split_regex  || null,
+    split_fields: r.split_fields || null,
+  }));
+
+  try {
+    await api('POST', '/api/save-config', {
+      path:          res.path,
+      analysis_type: state.analysisType,
+      root_depth:    state.rootIndex,
+      depth_rules:   depthRules,
+      global_values: getGlobalValues(),
+    });
+    alert('Config saved successfully ✓');
+  } catch (err) {
+    alert('Failed to save config:\n' + err);
+  }
+}
+
+async function doLoadConfig() {
+  const browseRes = await api('GET', '/api/browse-open-file?title=Load+Config');
+  if (browseRes.status !== 'success') return;
+
+  try {
+    const res = await api('POST', '/api/load-config', { path: browseRes.path });
+    const cfg = res.config;
+
+    // Apply analysis type
+    selectPipeline(cfg.analysis_type || 'caiman-analysis');
+
+    // Apply root depth
+    if (typeof cfg.root_depth === 'number') {
+      state.rootIndex = cfg.root_depth;
+    }
+
+    // Apply depth rules
+    state.depthRules = (cfg.depth_rules || []).map(r => ({
+      label:        r.label        || 'Ignore',
+      split_regex:  r.split_regex  || '',
+      split_fields: r.split_fields || ['SessionType','SessionNumber'],
+    }));
+
+    // Apply global values
+    const gv = cfg.global_values || {};
+    setTimeout(() => {
+      REQUIRED_FIELDS.forEach(f => {
+        const el = document.getElementById(`global_${f}`);
+        if (el && gv[f]) el.value = gv[f];
+      });
+    }, 50);
+
+    renderCrumbs();
+    renderDepthTable();
+    renderGlobalGrid();
+
+    alert('Config loaded successfully ✓');
+  } catch (err) {
+    alert('Failed to load config:\n' + err);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   XSS helper
+════════════════════════════════════════════════════════════════════ */
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
