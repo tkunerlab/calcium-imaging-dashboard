@@ -11,6 +11,8 @@ The software runs on your computer and opens its interface in your default web
 browser. It does not require a hosted web service or an internet connection
 after installation.
 
+![Calcium Imaging Dashboard cleaning workflow](src/calcium_imaging_dashboard/cell_registration_dashboard/frontend/images/docs-01-clean-merge.png)
+
 ## Requirements
 
 - Python 3.11 or 3.12

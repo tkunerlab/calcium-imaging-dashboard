@@ -143,6 +143,7 @@
       <section id="cleaning">
         <div class="eyebrow">Tab 1</div><h2>Cell Cleaning & Merging</h2>
         <p class="section-lead">This tab removes artifact components and combines multiple detections that represent one biological cell. Changes are reflected in alignment and matching immediately.</p>
+        <figure><img src="/frontend/images/docs-01-clean-merge.png" alt="Cell cleaning and merging overview with quality and pairwise distributions"><figcaption><strong>Cell Cleaning & Merging.</strong> Review spatial footprints and temporal traces, use quality distributions to choose auto-clean thresholds, and inspect pairwise distributions before merging likely duplicate detections.</figcaption></figure>
         <div class="grid">
           <div class="card"><h3>Individual session</h3><p>Select a session in the left list when an operation should affect only that session. Pairwise traces and metrics also have the clearest interpretation here.</p></div>
           <div class="card"><h3>Overview (all sessions)</h3><p>Select Overview to display the sessions in their current aligned coordinates. A selection can include components from many sessions; each edit is routed back to the owning session.</p></div>
@@ -163,6 +164,7 @@
       <section id="alignment">
         <div class="eyebrow">Tab 2</div><h2>Session Alignment</h2>
         <p class="section-lead">Alignment puts every field of view into a common coordinate system. Use the MIP and summed spatial footprints as complementary evidence: a high score in one view does not always imply a biologically good registration.</p>
+        <figure><img src="/frontend/images/docs-02-alignment.png" alt="Session alignment overview with before and after comparisons and grid-search results"><figcaption><strong>Session Alignment.</strong> Compare spatial-footprint and MIP coherence before and after registration, then review NCC, displacement and transform values across grid-search candidates.</figcaption></figure>
         <h3>Direct versus Sequential</h3>
         <div class="grid">
           <div class="card"><h3>Direct to Reference</h3><p>Every target session is registered independently to one reference session.</p><p><strong>Use when:</strong> fields of view are already similar, or when you want simple, independent transforms with no propagated error.</p></div>
@@ -185,6 +187,7 @@
       <section id="matching">
         <div class="eyebrow">Tab 3</div><h2>Multi-Session Cell Matching</h2>
         <p class="section-lead">Matching is deliberately an Overview/all-session workflow. There is no session list in this tab: every ordered session for the selected cohort and animal participates.</p>
+        <figure><img src="/frontend/images/docs-03-cell-matching.png" alt="Multi-session cell matching results with tracked cells, presence heatmap and distributions"><figcaption><strong>Multi-Session Cell Matching.</strong> Inspect tracked centroids, session coverage, possible intrasession conflicts, the presence heatmap and matched-versus-alternative distributions before saving.</figcaption></figure>
         <h3>Core parameters</h3>
         <div class="table-wrap"><table><thead><tr><th>Parameter</th><th>What it controls</th><th>Tuning effect</th></tr></thead><tbody>
           <tr><td>Max Distance Limit</td><td>Maximum centroid displacement considered for a candidate association.</td><td>Lower is stricter; higher admits more distant candidates.</td></tr>
