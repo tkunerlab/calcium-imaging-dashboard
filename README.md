@@ -2,7 +2,7 @@
 
 Calcium Imaging Dashboard is a local, browser-based workflow for:
 
-- building a portable HDF5 database from CaImAn or Minian analysis output;
+- building a portable HDF5 database from CaImAn, Minian, or MIN1PIPE output;
 - cleaning and merging segmented cells;
 - aligning fields of view across sessions; and
 - matching cells across sessions.
@@ -95,13 +95,36 @@ db-builder
 If the default local port is occupied, use `--port`, for example
 `cell-registration-dashboard --port 8012`.
 
+In the database builder, select a representative session folder and then choose
+the pipeline's analysis-result pattern. The supplied recursive defaults are
+`caiman-analysis/**/caiman_results.hdf5`,
+`minian-analysis/**/A.zarr`, and `**/*_data_processed*.mat` for MIN1PIPE.
+Patterns may identify a file or folder; when a session contains multiple
+matches, the most recently modified match is imported.
+
 ## Database format and safe editing
 
 New databases use the top-level HDF5 group `Database`. The dashboard also reads
 an older file when it contains one unambiguous non-system root group.
 
 The dashboard keeps the selected raw database unchanged. Saving creates or
-updates a sibling file whose name ends in `_processed`.
+updates a sibling file whose name ends in `_curated`.
+
+Schema 1.2 requires `SpatialFootprints`, `TemporalFootprints`, and
+`MaxProjection` per session. It optionally retains deconvolved events, dF/F,
+native CaImAn quality evidence, and stimulus timing. Every imported component
+also receives three cross-pipeline metrics: footprint area above 20% of its
+peak, footprint eccentricity, and temporal contrast (99th-percentile amplitude
+above the median divided by trace standard deviation).
+
+The quality finder is a review tool: thresholds are disabled by default and
+candidate detection only selects cells. Deletion still requires the explicit
+**Discard Selected** action.
+
+Optional per-session stimulus tables may be CSV or XLSX with columns `frame`
+and `stimulus`; frames are positive 1-based integers. A combined MAT/HDF5 file
+may instead mirror the database hierarchy and place one frame array per
+stimulus under each session's `StimulusData` group.
 
 ## Example data
 

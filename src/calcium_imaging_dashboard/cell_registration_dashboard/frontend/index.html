@@ -155,26 +155,29 @@
                     </div>
                 </div>
 
-                <!-- Auto-Clean Configuration -->
+                <!-- Non-mutating quality candidate configuration -->
                 <div class="space-y-3 p-3 bg-gray-950/40 border border-gray-800 rounded-lg">
-                    <label class="text-xs font-bold uppercase tracking-wider text-emerald-400 block mb-1">Auto-Clean Low-Quality Cells</label>
-                    <p class="text-[10px] leading-relaxed text-gray-500">A cell is removed when either metric falls below its threshold. Changes stay undoable until Save.</p>
+                    <label class="text-xs font-bold uppercase tracking-wider text-emerald-400 block mb-1">Find Quality Review Candidates</label>
+                    <p class="text-[10px] leading-relaxed text-gray-500">Enable only the rules you want. Detection selects candidates for review and never deletes data.</p>
 
-                    <label class="block space-y-1">
-                        <span class="text-[11px] font-semibold text-gray-400">Min footprint area (pixels)</span>
-                        <input type="number" id="autoclean-area" min="0" step="1" value="5" class="w-full bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-emerald-500 focus:outline-none">
-                        <span class="block text-[9px] text-gray-600">Pixels above 20% of that cell's peak footprint.</span>
-                    </label>
+                    <div id="quality-threshold-controls" class="space-y-2">
+                        <label class="flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="min_footprint_area"><span>Min area</span><input type="number" data-value="min_footprint_area" min="0" step="1" value="5" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                        <label class="flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="max_footprint_area"><span>Max area</span><input type="number" data-value="max_footprint_area" min="0" step="1" value="500" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                        <label class="flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="min_temporal_contrast"><span>Min temporal contrast</span><input type="number" data-value="min_temporal_contrast" min="0" step="0.1" value="2" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                        <label class="flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="max_footprint_eccentricity"><span>Max eccentricity</span><input type="number" data-value="max_footprint_eccentricity" min="0" max="1" step="0.01" value="0.95" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                    </div>
 
-                    <label class="block space-y-1">
-                        <span class="text-[11px] font-semibold text-gray-400">Min temporal activity (AUC/frame)</span>
-                        <input type="number" id="autoclean-activity" min="0" step="0.001" value="0" class="w-full bg-gray-800 border border-gray-700 text-gray-200 text-sm rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-emerald-500 focus:outline-none">
-                        <span class="block text-[9px] text-gray-600">Positive area above the trace's 10th-percentile baseline.</span>
-                    </label>
+                    <div id="source-quality-controls" class="hidden space-y-2 pt-2 border-t border-gray-800">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-sky-400">Native CaImAn evidence</p>
+                        <label id="source-rejected-control" class="hidden flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" id="flag-source-rejected"><span>Flag source-rejected cells</span></label>
+                        <label id="source-snr-control" class="hidden flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="min_source_snr"><span>Min source SNR</span><input type="number" data-value="min_source_snr" step="0.1" value="2" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                        <label id="source-correlation-control" class="hidden flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="min_spatial_correlation"><span>Min spatial correlation</span><input type="number" data-value="min_spatial_correlation" step="0.01" value="0.8" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                        <label id="source-classifier-control" class="hidden flex items-center gap-2 text-[11px] text-gray-400"><input type="checkbox" data-threshold="min_classifier_score"><span>Min classifier score</span><input type="number" data-value="min_classifier_score" step="0.01" value="0.9" disabled class="ml-auto w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1"></label>
+                    </div>
 
                     <button onclick="runAutoClean()" id="btn-autoclean" class="w-full mt-2 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg font-bold text-xs transition-all flex items-center justify-center space-x-1.5 shadow-md">
                         <i class="fa-solid fa-filter-circle-xmark"></i>
-                        <span>Stage Auto-Clean</span>
+                        <span>Find & Select Candidates</span>
                     </button>
                 </div>
 
@@ -216,7 +219,7 @@
                     <h4 class="font-bold text-gray-300">Quick Selection Instructions</h4>
                     <p><b>Left-click & Drag</b> directly on the Footprints Map to draw a selection oval boundary. When you release, all cells inside will be selected. Hold the <b>Alt key</b> while dragging to deselect cells. Panning (Right-drag) and Zooming (Wheel) are synchronized across both maps!</p>
                     <hr class="border-gray-800">
-                    <p class="text-amber-500/80 font-medium"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Saving updates will write to <span class="font-mono text-gray-200">CalciumImagingDatabase_processed.mat</span> to preserve your raw backup file.</p>
+                    <p class="text-amber-500/80 font-medium"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Saving updates will write to a sibling <span class="font-mono text-gray-200">*_curated.mat</span> checkpoint and preserve the raw file.</p>
                 </div>
             </div>
 
@@ -435,20 +438,28 @@
                     <div class="flex justify-between items-center mb-3">
                         <div class="flex items-center space-x-3">
                             <h4 class="text-sm font-bold text-gray-300">Cell Quality Distributions</h4>
-                            <span class="text-xs text-gray-500 italic">Choose evidence-based auto-clean thresholds</span>
+                            <span class="text-xs text-gray-500 italic">Choose evidence-based review thresholds</span>
                         </div>
                         <button onclick="computeCellQualityDistributions()" id="btn-calc-quality-dists" class="py-1.5 px-3.5 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-lg font-bold text-xs transition-all flex items-center space-x-1.5 shadow-sm">
                             <i class="fa-solid fa-chart-column text-emerald-400"></i>
                             <span>Compute Quality Distributions</span>
                         </button>
                     </div>
-                    <div id="quality-distributions-container" class="hidden grid grid-cols-2 gap-5 h-[190px]">
-                        <div class="relative h-full bg-black/40 border border-gray-900 rounded-lg p-2">
+                    <div id="selected-cell-quality" class="hidden mb-3 text-xs text-gray-300 bg-black/30 border border-gray-800 rounded-lg p-3"></div>
+                    <div id="quality-distributions-container" class="hidden grid grid-cols-3 gap-4">
+                        <div class="relative h-[180px] bg-black/40 border border-gray-900 rounded-lg p-2">
                             <canvas id="chart-footprint-area-hist"></canvas>
                         </div>
-                        <div class="relative h-full bg-black/40 border border-gray-900 rounded-lg p-2">
-                            <canvas id="chart-temporal-activity-hist"></canvas>
+                        <div class="relative h-[180px] bg-black/40 border border-gray-900 rounded-lg p-2">
+                            <canvas id="chart-temporal-contrast-hist"></canvas>
                         </div>
+                        <div class="relative h-[180px] bg-black/40 border border-gray-900 rounded-lg p-2">
+                            <canvas id="chart-footprint-eccentricity-hist"></canvas>
+                        </div>
+                        <div id="source-snr-chart" class="hidden relative h-[180px] bg-black/40 border border-gray-900 rounded-lg p-2"><canvas id="chart-source-snr-hist"></canvas></div>
+                        <div id="source-correlation-chart" class="hidden relative h-[180px] bg-black/40 border border-gray-900 rounded-lg p-2"><canvas id="chart-source-correlation-hist"></canvas></div>
+                        <div id="source-classifier-chart" class="hidden relative h-[180px] bg-black/40 border border-gray-900 rounded-lg p-2"><canvas id="chart-source-classifier-hist"></canvas></div>
+                        <div id="source-accepted-counts" class="hidden text-xs text-gray-300 bg-black/30 border border-gray-800 rounded-lg p-3"></div>
                     </div>
                 </div>
 
@@ -902,8 +913,8 @@
         let distHistChart = null;
         let corrHistChart = null;
         let overlapHistChartCleaning = null;
-        let footprintAreaHistChart = null;
-        let temporalActivityHistChart = null;
+        let qualityCharts = {};
+        let qualityDistributionsRequested = false;
         
         // Tab 3 Matching Variables
         let matchingMatrix = [];
@@ -1212,7 +1223,7 @@
         }
 
         async function workspaceSave() {
-            const data = await runWorkspaceAction("save", "Saving working changes to processed database...");
+            const data = await runWorkspaceAction("save", "Saving working changes to curated database...");
             if (data) await fetchCurrentDatabase();
         }
 
@@ -1564,6 +1575,7 @@
                 originX = 0;
                 originY = 0;
                 selectedCellIndices = [];
+                renderSelectedCellQuality(null);
                 selectorEllipse = null;
                 isDraggingSelector = false;
                 
@@ -1583,8 +1595,6 @@
                 if (distHistChart) { distHistChart.destroy(); distHistChart = null; }
                 if (corrHistChart) { corrHistChart.destroy(); corrHistChart = null; }
                 if (overlapHistChartCleaning) { overlapHistChartCleaning.destroy(); overlapHistChartCleaning = null; }
-                if (footprintAreaHistChart) { footprintAreaHistChart.destroy(); footprintAreaHistChart = null; }
-                if (temporalActivityHistChart) { temporalActivityHistChart.destroy(); temporalActivityHistChart = null; }
                 
                 // Load background images
                 spatialSumImg = new Image();
@@ -1606,6 +1616,9 @@
                 plotTracesChart();
                 
                 hideLoader();
+                if (qualityDistributionsRequested && activeTab === "cleaning") {
+                    await computeCellQualityDistributions();
+                }
             } catch (err) {
                 console.error("Failed to load overview data:", err);
                 hideLoader();
@@ -1664,6 +1677,7 @@
                 alignOriginX = 0;
                 alignOriginY = 0;
                 selectedCellIndices = [];
+                renderSelectedCellQuality(null);
                 selectorEllipse = null;
                 isDraggingSelector = false;
                 
@@ -1683,8 +1697,6 @@
                 if (distHistChart) { distHistChart.destroy(); distHistChart = null; }
                 if (corrHistChart) { corrHistChart.destroy(); corrHistChart = null; }
                 if (overlapHistChartCleaning) { overlapHistChartCleaning.destroy(); overlapHistChartCleaning = null; }
-                if (footprintAreaHistChart) { footprintAreaHistChart.destroy(); footprintAreaHistChart = null; }
-                if (temporalActivityHistChart) { temporalActivityHistChart.destroy(); temporalActivityHistChart = null; }
                 
                 // Prefetch images to trigger redraw when loaded
                 spatialSumImg = new Image();
@@ -1707,6 +1719,9 @@
                 plotTracesChart(); // resets traces
                 
                 hideLoader();
+                if (qualityDistributionsRequested && activeTab === "cleaning") {
+                    await computeCellQualityDistributions();
+                }
             } catch (err) {
                 console.error("Failed to load session data:", err);
                 hideLoader();
@@ -2025,6 +2040,7 @@
                 
                 renderCleaningView();
                 updateTracesPlot();
+                updateSelectedCellQuality();
             }
         }
 
@@ -2240,12 +2256,22 @@
         }
 
         function cellQualityScopeRequest() {
+            const overviewCell = (
+                activeSession === "overview" && selectedCellIndices.length === 1
+            ) ? centroidsList[selectedCellIndices[0]] : null;
             return {
                 cohort: selectedCohort,
                 mouse: selectedMouse,
-                session_type: (activeSession === "overview") ? "" : activeSession.session_type,
-                session_name: (activeSession === "overview") ? "" : activeSession.session_name,
-                is_overview: (activeSession === "overview")
+                session_type: overviewCell
+                    ? overviewCell.session_type
+                    : ((activeSession === "overview") ? "" : activeSession.session_type),
+                session_name: overviewCell
+                    ? overviewCell.session_name
+                    : ((activeSession === "overview") ? "" : activeSession.session_name),
+                is_overview: (activeSession === "overview"),
+                selected_cell_index: overviewCell
+                    ? overviewCell.cell_idx
+                    : ((selectedCellIndices.length === 1) ? selectedCellIndices[0] : null)
             };
         }
 
@@ -2270,62 +2296,117 @@
             };
         }
 
+        function renderSelectedCellQuality(selected) {
+            const panel = document.getElementById("selected-cell-quality");
+            if (!selected) {
+                panel.classList.add("hidden");
+                panel.innerHTML = "";
+                return;
+            }
+            const entries = [
+                ...Object.entries(selected.common),
+                ...Object.entries(selected.source).map(([name, value]) => [`Source ${name}`, value]),
+            ];
+            panel.innerHTML = `<strong class="text-emerald-300">${selected.display_name || "Cell"} · Cell ${selected.index}</strong> · `
+                + entries.map(([name, value]) => {
+                    const shown = Number.isFinite(Number(value)) ? Number(value).toPrecision(4) : "missing";
+                    return `<span class="mr-3"><span class="text-gray-500">${name}:</span> ${shown}</span>`;
+                }).join("");
+            panel.classList.remove("hidden");
+        }
+
+        async function fetchCellQuality() {
+            const res = await fetch(`${API_URL}/cell-quality-stats`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(cellQualityScopeRequest())
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "Quality calculation failed");
+            return data;
+        }
+
+        function drawQualityHistogram(metric, canvasId, title, color, data) {
+            if (qualityCharts[metric]) qualityCharts[metric].destroy();
+            const histogram = data.histograms[metric];
+            qualityCharts[metric] = new Chart(
+                document.getElementById(canvasId).getContext("2d"),
+                {
+                    type: "bar",
+                    data: {
+                        labels: histogram.bins.map(value => Number(value).toPrecision(3)),
+                        datasets: [{
+                            data: histogram.counts,
+                            backgroundColor: color.replace("1)", "0.65)"),
+                            borderColor: color,
+                            borderWidth: 1,
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0
+                        }]
+                    },
+                    options: qualityHistogramOptions(title)
+                }
+            );
+        }
+
+        function setSourceQualityVisibility(data) {
+            const availability = {
+                "source-snr": data.histograms.SourceTemporalSNR.bins.length > 0,
+                "source-correlation": data.histograms.SpatialCorrelation.bins.length > 0,
+                "source-classifier": data.histograms.ClassifierScore.bins.length > 0,
+            };
+            const accepted = Object.values(data.accepted_counts).reduce((a, b) => a + b, 0) > 0;
+            document.getElementById("source-snr-chart").classList.toggle("hidden", !availability["source-snr"]);
+            document.getElementById("source-correlation-chart").classList.toggle("hidden", !availability["source-correlation"]);
+            document.getElementById("source-classifier-chart").classList.toggle("hidden", !availability["source-classifier"]);
+            document.getElementById("source-snr-control").classList.toggle("hidden", !availability["source-snr"]);
+            document.getElementById("source-correlation-control").classList.toggle("hidden", !availability["source-correlation"]);
+            document.getElementById("source-classifier-control").classList.toggle("hidden", !availability["source-classifier"]);
+            document.getElementById("source-rejected-control").classList.toggle("hidden", !accepted);
+            if (!accepted) document.getElementById("flag-source-rejected").checked = false;
+            for (const [name, available] of [
+                ["min_source_snr", availability["source-snr"]],
+                ["min_spatial_correlation", availability["source-correlation"]],
+                ["min_classifier_score", availability["source-classifier"]],
+            ]) {
+                if (!available) {
+                    const toggle = document.querySelector(`[data-threshold="${name}"]`);
+                    const input = document.querySelector(`[data-value="${name}"]`);
+                    toggle.checked = false;
+                    input.disabled = true;
+                }
+            }
+            const anySource = accepted || Object.values(availability).some(Boolean);
+            document.getElementById("source-quality-controls").classList.toggle("hidden", !anySource);
+            const counts = document.getElementById("source-accepted-counts");
+            counts.classList.toggle("hidden", !accepted);
+            if (accepted) {
+                counts.innerHTML = `<strong>CaImAn accepted status</strong><br>`
+                    + `Accepted: ${data.accepted_counts.accepted} · `
+                    + `Rejected: ${data.accepted_counts.rejected} · `
+                    + `Unknown: ${data.accepted_counts.unknown}`;
+            }
+        }
+
         async function computeCellQualityDistributions() {
             if (!sessionProjections) return;
-            showLoader("Computing footprint area and temporal activity distributions...");
+            qualityDistributionsRequested = true;
+            showLoader("Computing stored and live cell-quality distributions...");
             try {
-                const res = await fetch(`${API_URL}/cell-quality-stats`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(cellQualityScopeRequest())
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || "Quality distribution calculation failed");
-                if (!data.footprint_area_bins?.length) {
+                const data = await fetchCellQuality();
+                if (!data.n_cells) {
                     alert("No cells are available in the active scope.");
                     return;
                 }
-
                 document.getElementById("quality-distributions-container").classList.remove("hidden");
-                if (footprintAreaHistChart) footprintAreaHistChart.destroy();
-                footprintAreaHistChart = new Chart(
-                    document.getElementById("chart-footprint-area-hist").getContext("2d"),
-                    {
-                        type: "bar",
-                        data: {
-                            labels: data.footprint_area_bins.map(value => Number(value).toFixed(1)),
-                            datasets: [{
-                                data: data.footprint_area_counts,
-                                backgroundColor: "rgba(16, 185, 129, 0.65)",
-                                borderColor: "#10b981",
-                                borderWidth: 1,
-                                barPercentage: 1.0,
-                                categoryPercentage: 1.0
-                            }]
-                        },
-                        options: qualityHistogramOptions("Footprint area (pixels above 20% peak)")
-                    }
-                );
-
-                if (temporalActivityHistChart) temporalActivityHistChart.destroy();
-                temporalActivityHistChart = new Chart(
-                    document.getElementById("chart-temporal-activity-hist").getContext("2d"),
-                    {
-                        type: "bar",
-                        data: {
-                            labels: data.temporal_activity_bins.map(value => Number(value).toPrecision(3)),
-                            datasets: [{
-                                data: data.temporal_activity_counts,
-                                backgroundColor: "rgba(245, 158, 11, 0.65)",
-                                borderColor: "#f59e0b",
-                                borderWidth: 1,
-                                barPercentage: 1.0,
-                                categoryPercentage: 1.0
-                            }]
-                        },
-                        options: qualityHistogramOptions("Positive temporal AUC per frame")
-                    }
-                );
+                drawQualityHistogram("FootprintArea", "chart-footprint-area-hist", "Footprint area (>20% peak pixels)", "rgba(16, 185, 129, 1)", data);
+                drawQualityHistogram("TemporalContrast", "chart-temporal-contrast-hist", "Temporal contrast", "rgba(245, 158, 11, 1)", data);
+                drawQualityHistogram("FootprintEccentricity", "chart-footprint-eccentricity-hist", "Footprint eccentricity", "rgba(99, 102, 241, 1)", data);
+                if (data.histograms.SourceTemporalSNR.bins.length) drawQualityHistogram("SourceTemporalSNR", "chart-source-snr-hist", "CaImAn source SNR", "rgba(14, 165, 233, 1)", data);
+                if (data.histograms.SpatialCorrelation.bins.length) drawQualityHistogram("SpatialCorrelation", "chart-source-correlation-hist", "CaImAn spatial correlation", "rgba(168, 85, 247, 1)", data);
+                if (data.histograms.ClassifierScore.bins.length) drawQualityHistogram("ClassifierScore", "chart-source-classifier-hist", "CaImAn classifier score", "rgba(236, 72, 153, 1)", data);
+                setSourceQualityVisibility(data);
+                renderSelectedCellQuality(data.selected_cell);
             } catch (err) {
                 console.error("Failed to compute cell-quality distributions:", err);
                 alert(err.message);
@@ -2334,65 +2415,90 @@
             }
         }
 
-        async function runAutoClean() {
-            if (!sessionProjections) return;
-            const minArea = Number(document.getElementById("autoclean-area").value);
-            const minActivity = Number(document.getElementById("autoclean-activity").value);
-            if (!Number.isFinite(minArea) || !Number.isFinite(minActivity) || minArea < 0 || minActivity < 0) {
-                alert("Auto-clean thresholds must be non-negative numbers.");
+        async function updateSelectedCellQuality() {
+            if (!sessionProjections || selectedCellIndices.length !== 1) {
+                renderSelectedCellQuality(null);
                 return;
             }
-            const scopeText = activeSession === "overview"
-                ? "all sessions in this Overview"
-                : activeSession.display_name;
-            const confirmed = confirm(
-                `Stage auto-clean for ${scopeText}?\n\n`
-                + `Remove cells with footprint area < ${minArea} pixels OR temporal activity < ${minActivity} AUC/frame.\n\n`
-                + "You can Undo this change until Save."
-            );
-            if (!confirmed) return;
+            try {
+                const data = await fetchCellQuality();
+                renderSelectedCellQuality(data.selected_cell);
+            } catch (err) {
+                console.error("Failed to load selected-cell quality:", err);
+            }
+        }
 
-            showLoader("Applying cell-quality thresholds in the working copy...");
+        async function runAutoClean() {
+            if (!sessionProjections) return;
+            const payload = { ...cellQualityScopeRequest(), flag_source_rejected: document.getElementById("flag-source-rejected").checked };
+            let enabled = payload.flag_source_rejected;
+            let invalidThreshold = null;
+            document.querySelectorAll("[data-threshold]").forEach(toggle => {
+                const name = toggle.dataset.threshold;
+                if (!toggle.checked) {
+                    payload[name] = null;
+                    return;
+                }
+                const value = Number(document.querySelector(`[data-value="${name}"]`).value);
+                if (!Number.isFinite(value)) {
+                    invalidThreshold = name;
+                    return;
+                }
+                payload[name] = value;
+                enabled = true;
+            });
+            if (invalidThreshold) {
+                alert(`${invalidThreshold} must be a finite number.`);
+                return;
+            }
+            if (!enabled) {
+                alert("Enable at least one quality rule first.");
+                return;
+            }
+            showLoader("Finding review candidates without changing the database...");
             try {
                 const res = await fetch(`${API_URL}/autoclean-sessions`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        ...cellQualityScopeRequest(),
-                        min_footprint_area: minArea,
-                        min_temporal_activity: minActivity
-                    })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || "Auto-clean failed");
-                updateWorkspaceStatus(data.workspace);
-                if (handleDbSwitched(data)) {
-                    await selectMouse(selectedMouse);
-                    return;
-                }
-                if (!data.total_discarded) {
-                    alert("No cells fell below either quality threshold. Nothing was changed.");
-                    return;
-                }
-
-                const lines = Object.entries(data.discarded)
-                    .filter(([, count]) => count > 0)
-                    .map(([name, count]) => `  • ${name}: ${count}`);
-                alert(`Staged removal of ${data.total_discarded} low-quality cells:\n${lines.join("\n")}`);
-                await refreshSessionCounts();
+                if (!res.ok) throw new Error(data.detail || "Candidate detection failed");
                 if (activeSession === "overview") {
-                    await selectOverviewMode();
+                    const candidatesBySession = new Map(
+                        data.sessions.map(item => [item.display_name, new Set(item.candidate_indices)])
+                    );
+                    selectedCellIndices = centroidsList
+                        .map((cell, index) => candidatesBySession.get(cell.display_name)?.has(cell.cell_idx) ? index : -1)
+                        .filter(index => index >= 0);
                 } else {
-                    const activeIdx = sessionsList.findIndex(s => s.display_name === activeSession.display_name);
-                    await selectActiveSession(activeIdx);
+                    selectedCellIndices = data.sessions[0]?.candidate_indices || [];
                 }
+                renderCleaningView();
+                updateTracesPlot();
+                updateSelectedCellQuality();
+                const lines = data.sessions
+                    .filter(item => item.candidate_indices.length)
+                    .map(item => `${item.display_name}: ${item.candidate_indices.length}`);
+                alert(
+                    data.total_candidates
+                        ? `Selected ${data.total_candidates} review candidate(s).\n${lines.join("\n")}\n\nUse Discard Selected only after review.`
+                        : "No cells failed the enabled rules. Nothing was selected."
+                );
             } catch (err) {
-                console.error("Auto-clean failed:", err);
+                console.error("Candidate detection failed:", err);
                 alert(err.message);
             } finally {
                 hideLoader();
             }
         }
+
+        document.querySelectorAll("[data-threshold]").forEach(toggle => {
+            toggle.addEventListener("change", () => {
+                const input = document.querySelector(`[data-value="${toggle.dataset.threshold}"]`);
+                if (input) input.disabled = !toggle.checked;
+            });
+        });
 
         // Async fetch and render binned pairwise statistics histograms
         async function computePairwiseDistributions() {
@@ -4774,6 +4880,7 @@
                         
                         if (changed) {
                             updateTracesPlot();
+                            updateSelectedCellQuality();
                         }
                     } else if (selectorStart) {
                         // Single click centroid selection fallback

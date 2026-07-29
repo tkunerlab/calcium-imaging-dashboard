@@ -69,8 +69,12 @@ class CaimanLoader:
         import h5py
         import scipy.sparse
 
-        data_dir = _find_latest_data_dir(analysis_dir)
-        result_path = os.path.join(data_dir, self.RESULT_FILENAME)
+        if os.path.isfile(analysis_dir):
+            result_path = analysis_dir
+            data_dir = os.path.dirname(result_path)
+        else:
+            data_dir = _find_latest_data_dir(analysis_dir)
+            result_path = os.path.join(data_dir, self.RESULT_FILENAME)
 
         if not os.path.isfile(result_path):
             raise DataNotFoundError(
@@ -270,12 +274,71 @@ class CaimanLoader:
                 max_proj = np.max(spatial, axis=0).astype(np.float64)
                 max_projection_source = "caiman:spatial_footprints_max"
 
-        return {
+        result = {
             "spatial":   spatial,    # (N, H, W)
             "temporal":  temporal,   # (N, T)
             "max_proj":  max_proj,   # (H, W)
             "max_projection_source": max_projection_source,
         }
+        source_quality = {}
+        with h5py.File(result_path, "r") as optional_file:
+            optional_estimates = optional_file["estimates"]
+            for source_name, output_name in (
+                ("S", "deconvolved_events"),
+                ("F_dff", "delta_f_over_f"),
+            ):
+                if source_name in optional_estimates:
+                    raw_value = np.asarray(optional_estimates[source_name][()])
+                    if raw_value.ndim == 0 or not np.issubdtype(raw_value.dtype, np.number):
+                        continue
+                    value = raw_value.astype(np.float64, copy=False)
+                    if value.ndim == 1:
+                        value = value[np.newaxis, :]
+                    if value.ndim == 2 and value.shape[0] != K and value.shape[1] == K:
+                        value = value.T
+                    if value.ndim == 2 and value.shape[0] == K:
+                        result[output_name] = value
+
+            accepted = np.full(K, -1, dtype=np.int8)
+            status_present = False
+            for source_name, status in (("idx_components", 1), ("idx_components_bad", 0)):
+                if source_name not in optional_estimates:
+                    continue
+                raw_indices = np.asarray(optional_estimates[source_name][()])
+                if not np.issubdtype(raw_indices.dtype, np.number):
+                    continue
+                indices = raw_indices.reshape(-1)
+                indices = indices[np.isfinite(indices)].astype(np.int64, copy=False)
+                indices = indices[(indices >= 0) & (indices < K)]
+                accepted[indices] = status
+                status_present = True
+            if status_present:
+                source_quality["Accepted"] = accepted
+
+            for source_name, output_name in (
+                ("SNR_comp", "TemporalSNR"),
+                ("r_values", "SpatialCorrelation"),
+                ("cnn_preds", "ClassifierScore"),
+            ):
+                if source_name not in optional_estimates:
+                    continue
+                raw_value = np.asarray(optional_estimates[source_name][()])
+                if not np.issubdtype(raw_value.dtype, np.number):
+                    continue
+                value = raw_value.astype(np.float64, copy=False)
+                if source_name == "cnn_preds" and value.ndim == 2:
+                    if value.shape[0] == K:
+                        value = value[:, -1]
+                    elif value.shape[1] == K:
+                        value = value[-1, :]
+                value = value.reshape(-1)
+                if value.size == K:
+                    value = value.copy()
+                    value[~np.isfinite(value)] = np.nan
+                    source_quality[output_name] = value
+        if source_quality:
+            result["source_quality"] = source_quality
+        return result
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -298,19 +361,26 @@ class MinianLoader:
         """
         import zarr
 
-        data_dir = _find_latest_data_dir(analysis_dir)
+        if (
+            os.path.isdir(analysis_dir)
+            and os.path.basename(os.path.normpath(analysis_dir)).casefold() == "a.zarr"
+        ):
+            data_dir = os.path.dirname(os.path.normpath(analysis_dir))
+            zarr_base = data_dir
+        else:
+            data_dir = _find_latest_data_dir(analysis_dir)
 
-        # Minian may store zarr files directly in data_dir or in a `data/` sub-folder
-        candidates = [
-            data_dir,
-            os.path.join(data_dir, "data"),
-        ]
+            # Minian may store zarr files directly in data_dir or in a `data/` sub-folder
+            candidates = [
+                data_dir,
+                os.path.join(data_dir, "data"),
+            ]
 
-        zarr_base = None
-        for c in candidates:
-            if os.path.isdir(os.path.join(c, "A.zarr")):
-                zarr_base = c
-                break
+            zarr_base = None
+            for c in candidates:
+                if os.path.isdir(os.path.join(c, "A.zarr")):
+                    zarr_base = c
+                    break
 
         if zarr_base is None:
             raise DataNotFoundError(
@@ -370,23 +440,187 @@ class MinianLoader:
         if max_proj.ndim > 2:
             max_proj = max_proj.squeeze()
 
-        return {
+        result = {
             "spatial":   A,         # (N, H, W)
             "temporal":  C,         # (N, T)
             "max_proj":  max_proj,  # (H, W)
             "max_projection_source": "minian:max_proj.zarr/max_proj",
         }
+        event_path = os.path.join(zarr_base, "S.zarr")
+        if os.path.isdir(event_path):
+            events = _zarr_to_array(zarr.open(event_path, mode="r"), "S").astype(np.float64)
+            if events.ndim == 1:
+                events = events[np.newaxis, :]
+            if events.ndim == 2 and events.shape[0] != A.shape[0] and events.shape[1] == A.shape[0]:
+                events = events.T
+            if events.ndim == 2 and events.shape[0] == A.shape[0]:
+                result["deconvolved_events"] = events
+        return result
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Factory
 # ──────────────────────────────────────────────────────────────────────────────
 
+class Min1PipeLoader:
+    """Load the final native ``*_data_processed*.mat`` MIN1PIPE result."""
+
+    _RESULT_PATTERN = re.compile(r"_data_processed(?:_refined)?\.mat$", re.IGNORECASE)
+
+    @classmethod
+    def result_path(cls, session_dir: str) -> str:
+        try:
+            candidates = [
+                name for name in os.listdir(session_dir)
+                if cls._RESULT_PATTERN.search(name)
+                and os.path.isfile(os.path.join(session_dir, name))
+            ]
+        except FileNotFoundError as exc:
+            raise DataNotFoundError(f"Session folder not found: {session_dir}") from exc
+        if not candidates:
+            raise DataNotFoundError(
+                f"No *_data_processed.mat MIN1PIPE result found in: {session_dir}"
+            )
+        candidates.sort(
+            key=lambda name: (
+                "_data_processed_refined.mat" not in name.casefold(),
+                name.casefold(),
+            )
+        )
+        return os.path.join(session_dir, candidates[0])
+
+    @staticmethod
+    def _hdf5_value(handle, name: str):
+        import h5py
+        import scipy.sparse
+
+        if name not in handle:
+            return None
+        obj = handle[name]
+        if isinstance(obj, h5py.Dataset):
+            return np.asarray(obj[()])
+        if not isinstance(obj, h5py.Group):
+            return None
+        keys = set(obj.keys())
+        if {"data", "ir", "jc"}.issubset(keys):
+            data = np.asarray(obj["data"][()]).reshape(-1)
+            indices = np.asarray(obj["ir"][()]).reshape(-1).astype(np.int64)
+            indptr = np.asarray(obj["jc"][()]).reshape(-1).astype(np.int64)
+            if "dims" in obj:
+                shape = tuple(np.asarray(obj["dims"][()]).reshape(-1).astype(int))
+            elif "shape" in obj:
+                shape = tuple(np.asarray(obj["shape"][()]).reshape(-1).astype(int))
+            else:
+                shape = (int(indices.max()) + 1, len(indptr) - 1)
+            return scipy.sparse.csc_matrix((data, indices, indptr), shape=shape)
+        return None
+
+    @staticmethod
+    def _orient_cell_frames(value, cells: int, name: str) -> np.ndarray:
+        array = np.asarray(value, dtype=np.float64).squeeze()
+        if array.ndim == 1:
+            array = array[np.newaxis, :]
+        if array.ndim != 2:
+            raise DataNotFoundError(f"{name} must be a two-dimensional cell-by-frame array.")
+        if array.shape[0] != cells and array.shape[1] == cells:
+            array = array.T
+        if array.shape[0] != cells:
+            raise DataNotFoundError(
+                f"{name} has {array.shape[0]} components; roifn has {cells}."
+            )
+        return array
+
+    def load(self, analysis_dir: str) -> dict:
+        import h5py
+        import scipy.io
+        import scipy.sparse
+
+        result_path = (
+            analysis_dir
+            if os.path.isfile(analysis_dir)
+            else self.result_path(analysis_dir)
+        )
+        hdf5_format = False
+        try:
+            loaded = scipy.io.loadmat(
+                result_path,
+                variable_names=["roifn", "sigfn", "spkfn", "dff", "imax", "pixh", "pixw"],
+                squeeze_me=True,
+            )
+            values = {
+                name: loaded.get(name)
+                for name in ("roifn", "sigfn", "spkfn", "dff", "imax", "pixh", "pixw")
+            }
+        except (NotImplementedError, ValueError, OSError):
+            hdf5_format = True
+            with h5py.File(result_path, "r") as handle:
+                values = {
+                    name: self._hdf5_value(handle, name)
+                    for name in ("roifn", "sigfn", "spkfn", "dff", "imax", "pixh", "pixw")
+                }
+
+        missing = [
+            name for name in ("roifn", "sigfn", "imax", "pixh", "pixw")
+            if values.get(name) is None
+        ]
+        if missing:
+            raise DataNotFoundError(
+                f"{os.path.basename(result_path)} is missing required value(s): "
+                + ", ".join(missing)
+            )
+        height = int(np.asarray(values["pixh"]).reshape(-1)[0])
+        width = int(np.asarray(values["pixw"]).reshape(-1)[0])
+        roifn = values["roifn"]
+        if scipy.sparse.issparse(roifn):
+            roifn = roifn.toarray()
+        roifn = np.asarray(roifn, dtype=np.float64).squeeze()
+        if roifn.ndim == 1:
+            roifn = roifn[:, np.newaxis]
+        if roifn.ndim != 2:
+            raise DataNotFoundError("roifn must be a pixel-by-component matrix.")
+        pixels = height * width
+        if roifn.shape[0] != pixels and roifn.shape[1] == pixels:
+            roifn = roifn.T
+        if roifn.shape[0] != pixels:
+            raise DataNotFoundError(
+                f"roifn has {roifn.shape[0]} pixels; pixh*pixw is {pixels}."
+            )
+        cells = roifn.shape[1]
+        spatial = roifn.T.reshape(cells, height, width, order="F")
+        temporal = self._orient_cell_frames(values["sigfn"], cells, "sigfn")
+        max_projection = np.asarray(values["imax"], dtype=np.float64).squeeze()
+        if hdf5_format and max_projection.ndim == 2:
+            max_projection = max_projection.T
+        elif max_projection.shape == (width, height) and (width, height) != (height, width):
+            max_projection = max_projection.T
+        if max_projection.shape != (height, width):
+            raise DataNotFoundError(
+                f"imax has shape {max_projection.shape}; expected {(height, width)}."
+            )
+
+        result = {
+            "spatial": spatial,
+            "temporal": temporal,
+            "max_proj": max_projection,
+            "max_projection_source": f"min1pipe:{os.path.basename(result_path)}/imax",
+        }
+        for source_name, output_name in (
+            ("spkfn", "deconvolved_events"),
+            ("dff", "delta_f_over_f"),
+        ):
+            if values.get(source_name) is not None:
+                result[output_name] = self._orient_cell_frames(
+                    values[source_name], cells, source_name
+                )
+        return result
+
+
 def get_loader(analysis_type: str):
     """Returns the appropriate loader for the given analysis type string."""
     loaders = {
         "caiman-analysis": CaimanLoader(),
         "minian-analysis": MinianLoader(),
+        "min1pipe": Min1PipeLoader(),
     }
     loader = loaders.get(analysis_type)
     if loader is None:

@@ -1,8 +1,8 @@
-"""Cell-quality metrics used by automatic cleaning and its distributions."""
+"""Cross-pipeline cell-quality metrics and compact distributions."""
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 
@@ -12,14 +12,18 @@ def cell_quality_metrics(
     temporal: np.ndarray,
     *,
     footprint_peak_fraction: float = 0.20,
-    baseline_percentile: float = 10.0,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Return footprint area and normalized positive temporal AUC per cell.
+) -> Dict[str, np.ndarray]:
+    """Return common area, eccentricity, and temporal-contrast arrays.
 
-    Footprint area is the number of pixels above ``footprint_peak_fraction`` of
-    that cell's peak. Temporal activity is positive area above the cell's
-    ``baseline_percentile`` baseline, divided by trace length so sessions with
-    different frame counts remain comparable.
+    Footprint support contains finite positive pixels above 20% (configurable)
+    of the cell's maximum positive value. Eccentricity is derived from the
+    spatial covariance of that binary support. Temporal Contrast is the trace's
+    99th-percentile amplitude above its median divided by the trace's standard
+    deviation. It measures how strongly a trace contains distinct high
+    excursions without pretending to estimate acquisition noise.
+
+    Degenerate inputs deliberately receive finite zero values so they remain
+    usable by histograms and threshold controls.
     """
     spatial = np.asarray(spatial, dtype=np.float64)
     temporal = np.asarray(temporal, dtype=np.float64)
@@ -31,28 +35,40 @@ def cell_quality_metrics(
         raise ValueError("Spatial and temporal footprints must have the same cell count.")
     if not 0.0 < footprint_peak_fraction <= 1.0:
         raise ValueError("footprint_peak_fraction must be in (0, 1].")
-    if not 0.0 <= baseline_percentile <= 100.0:
-        raise ValueError("baseline_percentile must be in [0, 100].")
-
-    clean_spatial = np.nan_to_num(spatial, nan=0.0, posinf=0.0, neginf=0.0)
+    clean_spatial = np.where(np.isfinite(spatial), spatial, 0.0)
     peaks = np.max(clean_spatial, axis=(1, 2), initial=0.0)
     cutoffs = peaks[:, None, None] * footprint_peak_fraction
-    areas = np.count_nonzero(
-        (clean_spatial > cutoffs) & (peaks[:, None, None] > 0.0),
-        axis=(1, 2),
-    ).astype(np.float64)
+    supports = (clean_spatial > cutoffs) & (peaks[:, None, None] > 0.0)
+    areas = np.count_nonzero(supports, axis=(1, 2)).astype(np.float64)
 
-    if temporal.shape[1] == 0:
-        activity = np.zeros(temporal.shape[0], dtype=np.float64)
-    else:
-        clean_temporal = np.nan_to_num(temporal, nan=0.0, posinf=0.0, neginf=0.0)
-        baselines = np.percentile(
-            clean_temporal, baseline_percentile, axis=1, keepdims=True
-        )
-        activity = np.sum(
-            np.maximum(clean_temporal - baselines, 0.0), axis=1
-        ) / temporal.shape[1]
-    return areas, activity
+    eccentricity = np.zeros(spatial.shape[0], dtype=np.float64)
+    for index, support in enumerate(supports):
+        coordinates = np.argwhere(support)
+        if coordinates.shape[0] < 2:
+            continue
+        covariance = np.cov(coordinates, rowvar=False, bias=True)
+        eigenvalues = np.linalg.eigvalsh(covariance)
+        major = float(max(eigenvalues[-1], 0.0))
+        minor = float(max(eigenvalues[0], 0.0))
+        if major > 0.0:
+            eccentricity[index] = np.sqrt(max(0.0, 1.0 - minor / major))
+
+    temporal_contrast = np.zeros(temporal.shape[0], dtype=np.float64)
+    for index, trace in enumerate(temporal):
+        finite_trace = trace[np.isfinite(trace)]
+        if finite_trace.size < 2:
+            continue
+        median = float(np.median(finite_trace))
+        amplitude = max(float(np.percentile(finite_trace, 99.0)) - median, 0.0)
+        scale = float(np.std(finite_trace))
+        if np.isfinite(scale) and scale > 0.0:
+            temporal_contrast[index] = amplitude / scale
+
+    return {
+        "FootprintArea": areas,
+        "FootprintEccentricity": eccentricity,
+        "TemporalContrast": temporal_contrast,
+    }
 
 
 def histogram(values: np.ndarray, *, max_bins: int = 40) -> Tuple[list, list]:

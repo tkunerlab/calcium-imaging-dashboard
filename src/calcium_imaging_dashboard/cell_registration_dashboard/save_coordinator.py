@@ -76,7 +76,7 @@ class SaveCoordinator:
             database.save_workspace(
                 mark_saved=False,
                 refresh_metadata=False,
-                payload=(snapshot.cells, snapshot.deleted),
+                payload=(snapshot.cells, snapshot.deleted, snapshot.records),
             )
 
             for mouse, mouse_cache in snapshot.alignment.items():
@@ -130,7 +130,7 @@ class SaveCoordinator:
 
             with h5py.File(staging_db, "r") as handle:
                 if database.db_var_name not in handle:
-                    raise ValueError("Processed checkpoint is missing the database root.")
+                    raise ValueError("Curated checkpoint is missing the database root.")
 
             os.replace(staging_db, final_processed)
             _make_visible(final_processed)

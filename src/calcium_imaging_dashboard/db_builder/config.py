@@ -13,7 +13,8 @@ def save_config(path: str, payload: Dict[str, Any]) -> None:
 
     Expected payload keys:
         analysis_type   : str
-        root_depth      : int   (how many levels up from the analysis folder is the root)
+        analysis_pattern: recursive file/folder pattern inside each session
+        root_depth      : int   (how many levels up from the session folder is the root)
         depth_rules     : list of dicts, one per depth level:
             {
                 "label":      str   ("CohortName" | "MouseName" | "SessionType" |
@@ -23,6 +24,8 @@ def save_config(path: str, payload: Dict[str, Any]) -> None:
             }
         global_values   : dict  { "CohortName": str|null, "MouseName": str|null,
                                    "SessionType": str|null, "SessionNumber": str|null }
+        stimulus_mode   : "none" | "table" | "combined"
+        stimulus_table_pattern / stimulus_combined_path : optional strings
     """
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:

@@ -104,6 +104,7 @@ class WorkspaceCommand:
 class WorkspaceSaveSnapshot:
     revision: int
     cells: Dict[SessionKey, Tuple[np.ndarray, np.ndarray]]
+    records: Dict[SessionKey, Tuple[CellRecord, ...]]
     deleted: set[SessionKey]
     alignment: Dict[str, Any]
     matching: Dict[str, Any]
@@ -268,6 +269,11 @@ class EditWorkspace:
         with self._lock:
             state = self._states.get(key)
             return state.arrays() if state is not None else None
+
+    def records_if_loaded(self, key: SessionKey) -> Optional[Tuple[CellRecord, ...]]:
+        with self._lock:
+            state = self._states.get(key)
+            return tuple(state.cells) if state is not None else None
 
     def is_deleted(self, key: SessionKey) -> bool:
         with self._lock:
@@ -537,6 +543,10 @@ class EditWorkspace:
             return WorkspaceSaveSnapshot(
                 revision=self.revision,
                 cells=cells,
+                records={
+                    key: tuple(self._states[key].cells)
+                    for key in cells
+                },
                 deleted=deleted,
                 alignment=deepcopy(self.alignment_state),
                 matching=deepcopy(self.matching_state),

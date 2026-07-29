@@ -442,17 +442,23 @@
     <div class="step-header" onclick="toggleCard('card1')">
       <div class="num" id="num1">1</div>
       <div>
-        <h2>Select Analysis Folder &amp; Type</h2>
-        <div class="step-sub">Point to a <code>*-analysis</code> folder and choose the pipeline</div>
+        <h2>Select Session Folder &amp; Pipeline</h2>
+        <div class="step-sub">Choose a representative session, then specify how its analysis result is named</div>
       </div>
       <span class="chevron">▾</span>
     </div>
     <div class="step-body">
 
       <div class="field-row">
-        <label>Analysis folder</label>
-        <input type="text" id="analysisFolder" placeholder="e.g. Z:/Data/Mouse56/Session01/caiman-analysis" />
+        <label>Session folder</label>
+        <input type="text" id="analysisFolder" placeholder="e.g. Z:/Data/Mouse56/Session01" />
         <button class="btn btn-ghost" onclick="browseAnalysisFolder()">📂 Browse…</button>
+      </div>
+
+      <div class="field-row" style="margin-top:14px;">
+        <label>Analysis result pattern</label>
+        <input type="text" id="analysisPattern" value="caiman-analysis/**/caiman_results.hdf5" />
+        <span class="hint">Recursive; newest match is used</span>
       </div>
 
       <div class="field-row" style="margin-top:14px;">
@@ -460,8 +466,7 @@
         <div class="pills">
           <div class="pill active" id="pill-caiman"    onclick="selectPipeline('caiman-analysis')">CaImAn</div>
           <div class="pill"        id="pill-minian"    onclick="selectPipeline('minian-analysis')">Minian</div>
-          <div class="pill disabled" data-tip="Coming soon">Cascade</div>
-          <div class="pill disabled" data-tip="Coming soon">MIN1PIPE</div>
+          <div class="pill"        id="pill-min1pipe"  onclick="selectPipeline('min1pipe')">MIN1PIPE</div>
         </div>
       </div>
 
@@ -595,6 +600,25 @@
         </select>
       </div>
 
+      <div class="field-row" style="margin-top:12px;flex-wrap:wrap;">
+        <label>Stimulus data</label>
+        <select id="stimulusMode" onchange="updateStimulusFields()">
+          <option value="none" selected>None</option>
+          <option value="table">Per-session CSV/XLSX</option>
+          <option value="combined">Combined MAT/HDF5</option>
+        </select>
+        <input id="stimulusTablePattern" type="text" style="display:none;min-width:320px;"
+               placeholder="Relative path, e.g. stimulus.csv or {SessionNumber}/stimulus.xlsx" />
+        <input id="stimulusCombinedPath" type="text" style="display:none;min-width:320px;"
+               placeholder="Combined hierarchy-matched MAT/HDF5 file" />
+        <button id="stimulusBrowseButton" class="btn btn-ghost" style="display:none;"
+                onclick="browseStimulusFile()">📂 Browse…</button>
+      </div>
+      <div class="info-box" id="stimulusHelp" style="display:none;margin-top:8px;">
+        Tables need columns named <strong>frame</strong> and <strong>stimulus</strong>.
+        Frames are positive 1-based integers; repeated frames may contain different stimuli.
+      </div>
+
       <div class="info-box warn" style="margin-top:12px;">
         ⚠ Existing sessions in the target file will be <strong>overwritten</strong>.
         New sessions will be appended.
@@ -647,6 +671,12 @@ let state = {
   pollInterval:   null,
 };
 
+const DEFAULT_ANALYSIS_PATTERNS = {
+  'caiman-analysis': 'caiman-analysis/**/caiman_results.hdf5',
+  'minian-analysis': 'minian-analysis/**/A.zarr',
+  'min1pipe': '**/*_data_processed*.mat',
+};
+
 /* ════════════════════════════════════════════════════════════════════
    Utility
 ════════════════════════════════════════════════════════════════════ */
@@ -680,15 +710,26 @@ function markDone(numId) {
    Step 1 — Folder & pipeline
 ════════════════════════════════════════════════════════════════════ */
 function selectPipeline(type) {
+  const patternInput = document.getElementById('analysisPattern');
+  const existingPattern = patternInput.value.trim();
   state.analysisType = type;
   document.querySelectorAll('.pill:not(.disabled)').forEach(p => p.classList.remove('active'));
-  const map = { 'caiman-analysis': 'pill-caiman', 'minian-analysis': 'pill-minian' };
+  const map = {
+    'caiman-analysis': 'pill-caiman',
+    'minian-analysis': 'pill-minian',
+    'min1pipe': 'pill-min1pipe',
+  };
   const el = document.getElementById(map[type]);
   if (el) el.classList.add('active');
+  document.getElementById('analysisFolder').placeholder =
+    'Select a representative session folder';
+  if (!existingPattern || Object.values(DEFAULT_ANALYSIS_PATTERNS).includes(existingPattern)) {
+    patternInput.value = DEFAULT_ANALYSIS_PATTERNS[type];
+  }
 }
 
 async function browseAnalysisFolder() {
-  const res = await api('GET', '/api/browse-folder?title=Select+-analysis+folder');
+  const res = await api('GET', '/api/browse-folder?title=Select+representative+session+folder');
   if (res.status === 'success') {
     document.getElementById('analysisFolder').value = res.path;
   }
@@ -696,7 +737,9 @@ async function browseAnalysisFolder() {
 
 async function doDiscover() {
   const folder = document.getElementById('analysisFolder').value.trim();
-  if (!folder) { alert('Please enter or browse to an analysis folder first.'); return; }
+  const analysisPattern = document.getElementById('analysisPattern').value.trim();
+  if (!folder) { alert('Please enter or browse to a session folder first.'); return; }
+  if (!analysisPattern) { alert('Please enter an analysis result pattern.'); return; }
 
   document.getElementById('discoverSpinner').style.display = '';
   document.getElementById('discoverBtn').disabled = true;
@@ -705,6 +748,7 @@ async function doDiscover() {
     const res = await api('POST', '/api/discover', {
       analysis_folder: folder,
       analysis_type:   state.analysisType,
+      analysis_pattern: analysisPattern,
     });
 
     state.allParts = res.all_parts;
@@ -720,7 +764,8 @@ async function doDiscover() {
 
     document.getElementById('rootInfo').style.display = '';
     document.getElementById('rootInfo').textContent =
-      `Discovered ${state.allParts.length} path levels. Click a folder name below to set it as the root of your hierarchy.`;
+      `Found ${res.match_count} result match(es) in the sample session and selected the newest. ` +
+      `Click a folder name below to set the hierarchy root.`;
 
   } catch (err) {
     alert('Discovery failed:\n' + err);
@@ -997,6 +1042,7 @@ async function doScan() {
     const res = await api('POST', '/api/scan', {
       root_path:     rootPath,
       analysis_type: state.analysisType,
+      analysis_pattern: document.getElementById('analysisPattern').value.trim(),
       depth_rules:   depthRules,
       global_values: getGlobalValues(),
     });
@@ -1041,6 +1087,21 @@ async function browseOutputFile() {
   }
 }
 
+function updateStimulusFields() {
+  const mode = document.getElementById('stimulusMode').value;
+  document.getElementById('stimulusTablePattern').style.display = mode === 'table' ? '' : 'none';
+  document.getElementById('stimulusCombinedPath').style.display = mode === 'combined' ? '' : 'none';
+  document.getElementById('stimulusBrowseButton').style.display = mode === 'combined' ? '' : 'none';
+  document.getElementById('stimulusHelp').style.display = mode === 'none' ? 'none' : '';
+}
+
+async function browseStimulusFile() {
+  const res = await api('GET', '/api/browse-stimulus-file?title=Select+Combined+Stimulus+File');
+  if (res.status === 'success') {
+    document.getElementById('stimulusCombinedPath').value = res.path;
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════
    Step 3 — Build
 ════════════════════════════════════════════════════════════════════ */
@@ -1068,6 +1129,7 @@ async function doBuild() {
     await api('POST', '/api/build', {
       root_path:     rootPath,
       analysis_type: state.analysisType,
+      analysis_pattern: document.getElementById('analysisPattern').value.trim(),
       output_path:   output,
       depth_rules:   depthRules,
       global_values: getGlobalValues(),
@@ -1075,6 +1137,9 @@ async function doBuild() {
       compression: document.getElementById('outputCompression').value,
       compression_level: Number(document.getElementById('outputCompressionLevel').value || 4),
       append_policy: document.getElementById('outputAppendPolicy').value,
+      stimulus_mode: document.getElementById('stimulusMode').value,
+      stimulus_table_pattern: document.getElementById('stimulusTablePattern').value.trim() || null,
+      stimulus_combined_path: document.getElementById('stimulusCombinedPath').value.trim() || null,
     });
 
     // Start polling
@@ -1151,9 +1216,13 @@ async function doSaveConfig() {
     await api('POST', '/api/save-config', {
       path:          res.path,
       analysis_type: state.analysisType,
+      analysis_pattern: document.getElementById('analysisPattern').value.trim(),
       root_depth:    state.rootIndex,
       depth_rules:   depthRules,
       global_values: getGlobalValues(),
+      stimulus_mode: document.getElementById('stimulusMode').value,
+      stimulus_table_pattern: document.getElementById('stimulusTablePattern').value.trim() || null,
+      stimulus_combined_path: document.getElementById('stimulusCombinedPath').value.trim() || null,
     });
     alert('Config saved successfully ✓');
   } catch (err) {
@@ -1171,6 +1240,8 @@ async function doLoadConfig() {
 
     // Apply analysis type
     selectPipeline(cfg.analysis_type || 'caiman-analysis');
+    document.getElementById('analysisPattern').value =
+      cfg.analysis_pattern || DEFAULT_ANALYSIS_PATTERNS[state.analysisType];
 
     // Apply root depth
     if (typeof cfg.root_depth === 'number') {
@@ -1192,6 +1263,11 @@ async function doLoadConfig() {
         if (el && gv[f]) el.value = gv[f];
       });
     }, 50);
+
+    document.getElementById('stimulusMode').value = cfg.stimulus_mode || 'none';
+    document.getElementById('stimulusTablePattern').value = cfg.stimulus_table_pattern || '';
+    document.getElementById('stimulusCombinedPath').value = cfg.stimulus_combined_path || '';
+    updateStimulusFields();
 
     renderCrumbs();
     renderDepthTable();

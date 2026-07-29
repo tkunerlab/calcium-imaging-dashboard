@@ -34,8 +34,15 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 from calcium_imaging_dashboard import __version__
-from .builder import build, discover_sessions, ANALYSIS_SUFFIXES
+from .builder import (
+    ANALYSIS_SUFFIXES,
+    DEFAULT_ANALYSIS_PATTERNS,
+    build,
+    discover_sessions,
+    find_analysis_target,
+)
 from .config import save_config, load_config
+from .loader import DataNotFoundError
 
 # ──────────────────────────────────────────────────────────────────────────────
 # App setup
@@ -128,20 +135,44 @@ def browse_open_file(title: str = "Open Config File"):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/api/browse-stimulus-file")
+def browse_stimulus_file(title: str = "Select Combined Stimulus File"):
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        path = filedialog.askopenfilename(
+            title=title,
+            filetypes=[
+                ("MAT/HDF5 files", "*.mat *.h5 *.hdf5"),
+                ("All files", "*.*"),
+            ],
+        )
+        root.destroy()
+        if not path:
+            return {"status": "cancelled"}
+        return {"status": "success", "path": os.path.normpath(path).replace("\\", "/")}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Discovery
 # ──────────────────────────────────────────────────────────────────────────────
 
 class DiscoverRequest(BaseModel):
-    analysis_folder: str   # e.g. "Z:/Data/Mouse56/Session01/caiman-analysis"
-    analysis_type:   str   # e.g. "caiman-analysis"
+    analysis_folder: str
+    analysis_type: str
+    analysis_pattern: Optional[str] = None
 
 
 @app.post("/api/discover")
 def api_discover(req: DiscoverRequest):
     """
-    Walks UP from the selected -analysis folder to find the root and extract
-    each intermediate path depth.
+    Validates a representative session folder, then walks upward so the user
+    can choose the hierarchy root and map every folder depth.
 
     Returns:
         root_path  : str         (the directory containing everything)
@@ -149,20 +180,22 @@ def api_discover(req: DiscoverRequest):
                                  immediate PARENT of the -analysis folder
         sample     : list[str]   a representative folder name at each depth
     """
-    analysis_folder = os.path.normpath(req.analysis_folder)
-
-    # Validate the analysis folder name ends with the expected suffix
-    folder_name = os.path.basename(analysis_folder).lower()
-    if not folder_name.endswith(req.analysis_type.lower()):
+    session_folder = os.path.normpath(req.analysis_folder)
+    if not os.path.isdir(session_folder):
         raise HTTPException(
             status_code=400,
-            detail=f"Selected folder '{folder_name}' does not look like a '{req.analysis_type}' folder."
+            detail=f"Session folder not found: {session_folder}",
         )
+    pattern = (
+        (req.analysis_pattern or "").strip()
+        or DEFAULT_ANALYSIS_PATTERNS.get(req.analysis_type.lower(), "")
+    )
+    try:
+        selected_result, match_count = find_analysis_target(session_folder, pattern)
+    except (DataNotFoundError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    # Parent of the analysis folder  (this is Session01 or similar)
-    # We walk all the way to the drive root and return every segment.
-    # The UI lets the user choose which level to treat as the hierarchy root.
-    parent = os.path.dirname(analysis_folder)
+    parent = session_folder
 
     # Collect all path parts from drive root to parent
     parts = []
@@ -204,7 +237,10 @@ def api_discover(req: DiscoverRequest):
     return {
         "all_parts":      parts,           # all path parts from drive root
         "analysis_type":  req.analysis_type,
-        "analysis_folder": analysis_folder.replace("\\", "/"),
+        "analysis_folder": session_folder.replace("\\", "/"),
+        "analysis_pattern": pattern,
+        "selected_result": selected_result.replace("\\", "/"),
+        "match_count": match_count,
     }
 
 
@@ -237,6 +273,7 @@ class ScanRequest(BaseModel):
     analysis_type: str
     depth_rules:   List[Dict[str, Any]]
     global_values: Dict[str, Optional[str]]
+    analysis_pattern: Optional[str] = None
 
 
 @app.post("/api/scan")
@@ -244,7 +281,12 @@ def api_scan(req: ScanRequest):
     """Dry-run: discover sessions and apply mapping, return preview without loading data."""
     from .builder import apply_mapping
 
-    sessions = discover_sessions(req.root_path, req.analysis_type, depth_rules=req.depth_rules)
+    sessions = discover_sessions(
+        req.root_path,
+        req.analysis_type,
+        depth_rules=req.depth_rules,
+        analysis_pattern=req.analysis_pattern,
+    )
     preview = []
     destination_counts: Dict[str, int] = {}
     for s in sessions:
@@ -294,6 +336,10 @@ class BuildRequest(BaseModel):
     compression: str = "gzip"
     compression_level: int = 4
     append_policy: str = "replace"
+    stimulus_mode: str = "none"
+    stimulus_table_pattern: Optional[str] = None
+    stimulus_combined_path: Optional[str] = None
+    analysis_pattern: Optional[str] = None
 
 
 def _run_build(req: BuildRequest):
@@ -314,6 +360,10 @@ def _run_build(req: BuildRequest):
             compression=req.compression,
             compression_level=req.compression_level,
             append_policy=req.append_policy,
+            stimulus_mode=req.stimulus_mode,
+            stimulus_table_pattern=req.stimulus_table_pattern,
+            stimulus_combined_path=req.stimulus_combined_path,
+            analysis_pattern=req.analysis_pattern,
         )
         _build_success = True
     except Exception as exc:
@@ -368,6 +418,10 @@ class SaveConfigRequest(BaseModel):
     root_depth:    int
     depth_rules:   List[Dict[str, Any]]
     global_values: Dict[str, Optional[str]]
+    stimulus_mode: str = "none"
+    stimulus_table_pattern: Optional[str] = None
+    stimulus_combined_path: Optional[str] = None
+    analysis_pattern: Optional[str] = None
 
 
 @app.post("/api/save-config")
@@ -378,6 +432,10 @@ def api_save_config(req: SaveConfigRequest):
             "root_depth":    req.root_depth,
             "depth_rules":   req.depth_rules,
             "global_values": req.global_values,
+            "stimulus_mode": req.stimulus_mode,
+            "stimulus_table_pattern": req.stimulus_table_pattern,
+            "stimulus_combined_path": req.stimulus_combined_path,
+            "analysis_pattern": req.analysis_pattern,
         }
         save_config(req.path, payload)
         return {"status": "success"}

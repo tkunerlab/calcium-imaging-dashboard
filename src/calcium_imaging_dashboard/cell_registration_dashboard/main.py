@@ -25,7 +25,7 @@ from calcium_imaging_dashboard import __version__
 from .database import CalciumImagingDatabase
 from .save_coordinator import SaveCoordinator
 from .workspace import EditWorkspace
-from .quality import cell_quality_metrics, histogram
+from .quality import histogram
 from .alignment import (
     compute_ncc,
     compute_stack_coherence,
@@ -1032,6 +1032,7 @@ class CellQualityRequest(BaseModel):
     is_overview: bool
     session_type: str = ""
     session_name: str = ""
+    selected_cell_index: Optional[int] = None
 
 
 def _quality_sessions(req: CellQualityRequest):
@@ -1048,38 +1049,79 @@ def _quality_sessions(req: CellQualityRequest):
 
 @app.post("/api/cell-quality-stats")
 def get_cell_quality_stats(req: CellQualityRequest):
-    """Return per-cell size/activity distributions for the active scope."""
+    """Return common and optional native-QC distributions for the active scope."""
     try:
-        all_areas = []
-        all_activity = []
+        collected = {
+            "FootprintArea": [],
+            "TemporalContrast": [],
+            "FootprintEccentricity": [],
+            "SourceTemporalSNR": [],
+            "SpatialCorrelation": [],
+            "ClassifierScore": [],
+        }
+        accepted_counts = {"accepted": 0, "rejected": 0, "unknown": 0}
+        selected_cell = None
         for session in _quality_sessions(req):
-            data = db.load_session_calcium_data(
+            quality = db.load_session_quality(
                 session["cohort"],
                 session["mouse"],
                 session["session_type"],
                 session["session_name"],
-                warp_cached=False,
             )
-            areas, activity = cell_quality_metrics(
-                data["spatial_footprints"], data["temporal_footprints"]
-            )
-            all_areas.extend(areas.tolist())
-            all_activity.extend(activity.tolist())
+            for name, values in quality["common"].items():
+                collected[name].extend(np.asarray(values).tolist())
+            source = quality["source"]
+            for name, output_name in (
+                ("TemporalSNR", "SourceTemporalSNR"),
+                ("SpatialCorrelation", "SpatialCorrelation"),
+                ("ClassifierScore", "ClassifierScore"),
+            ):
+                if name in source:
+                    collected[output_name].extend(
+                        np.asarray(source[name])[np.isfinite(source[name])].tolist()
+                    )
+            if "Accepted" in source:
+                statuses = np.asarray(source["Accepted"]).reshape(-1)
+                accepted_counts["accepted"] += int(np.count_nonzero(statuses == 1))
+                accepted_counts["rejected"] += int(np.count_nonzero(statuses == 0))
+                accepted_counts["unknown"] += int(np.count_nonzero(statuses == -1))
 
-        area_counts, area_bins = histogram(np.asarray(all_areas))
-        activity_counts, activity_bins = histogram(np.asarray(all_activity))
+            if (
+                req.selected_cell_index is not None
+                and session["session_type"] == req.session_type
+                and session["session_name"] == req.session_name
+                and 0 <= req.selected_cell_index < len(quality["common"]["FootprintArea"])
+            ):
+                index = req.selected_cell_index
+                selected_cell = {
+                    "index": index,
+                    "display_name": session["display_name"],
+                    "common": {
+                        name: float(values[index])
+                        for name, values in quality["common"].items()
+                    },
+                    "source": {
+                        name: (
+                            int(values[index]) if name == "Accepted" else float(values[index])
+                        )
+                        for name, values in source.items()
+                        if index < len(values)
+                    },
+                }
+
+        histograms = {}
+        for name, values in collected.items():
+            counts, bins = histogram(np.asarray(values))
+            histograms[name] = {"counts": counts, "bins": bins}
         return {
-            "n_cells": len(all_areas),
-            "footprint_area_counts": area_counts,
-            "footprint_area_bins": area_bins,
-            "temporal_activity_counts": activity_counts,
-            "temporal_activity_bins": activity_bins,
+            "n_cells": len(collected["FootprintArea"]),
+            "histograms": histograms,
+            "accepted_counts": accepted_counts,
+            "selected_cell": selected_cell,
             "metric_definition": {
                 "footprint_area": "Pixels above 20% of each cell's peak footprint intensity.",
-                "temporal_activity": (
-                    "Positive area above each trace's 10th-percentile baseline, "
-                    "divided by frame count."
-                ),
+                "temporal_contrast": "99th-percentile amplitude above median divided by trace standard deviation.",
+                "footprint_eccentricity": "Spatial-covariance eccentricity of the 20%-peak support.",
             },
         }
     except Exception as exc:
@@ -1087,68 +1129,123 @@ def get_cell_quality_stats(req: CellQualityRequest):
 
 
 class AutoCleanRequest(CellQualityRequest):
-    min_footprint_area: float
-    min_temporal_activity: float
+    min_footprint_area: Optional[float] = None
+    max_footprint_area: Optional[float] = None
+    min_temporal_contrast: Optional[float] = None
+    max_footprint_eccentricity: Optional[float] = None
+    flag_source_rejected: bool = False
+    min_source_snr: Optional[float] = None
+    min_spatial_correlation: Optional[float] = None
+    min_classifier_score: Optional[float] = None
 
 
 @app.post("/api/autoclean-sessions")
 def run_autoclean(req: AutoCleanRequest):
-    """Stage removal of cells below either requested quality threshold."""
+    """Detect review candidates without mutating the database or workspace."""
     try:
-        if req.min_footprint_area < 0 or req.min_temporal_activity < 0:
-            raise ValueError("Auto-clean thresholds must be non-negative.")
-        db_switched = ensure_write_on_processed_db()
-        discard_requests = {}
-        loaders = {}
-        discarded_counts = {}
-        reason_counts = {}
-
-        for session in _quality_sessions(req):
-            data = db.load_session_calcium_data(
-                session["cohort"],
-                session["mouse"],
-                session["session_type"],
-                session["session_name"],
-                warp_cached=False,
-            )
-            areas, activity = cell_quality_metrics(
-                data["spatial_footprints"], data["temporal_footprints"]
-            )
-            small = areas < req.min_footprint_area
-            inactive = activity < req.min_temporal_activity
-            discard = np.flatnonzero(small | inactive).astype(int).tolist()
-            key = workspace_key(
-                session["cohort"],
-                session["mouse"],
-                session["session_type"],
-                session["session_name"],
-            )
-            discard_requests[key] = discard
-            loaders[key] = workspace_loader(*key)
-            name = session["display_name"]
-            discarded_counts[name] = len(discard)
-            reason_counts[name] = {
-                "small_footprint": int(np.count_nonzero(small)),
-                "low_temporal_activity": int(np.count_nonzero(inactive)),
-                "both": int(np.count_nonzero(small & inactive)),
-            }
-
-        workspace.discard_indices(
-            discard_requests,
-            loaders,
-            label=(
-                "Auto-clean cells below footprint/activity thresholds"
-            ),
+        threshold_names = (
+            "min_footprint_area", "max_footprint_area", "min_temporal_contrast",
+            "max_footprint_eccentricity", "min_source_snr",
+            "min_spatial_correlation", "min_classifier_score",
         )
-        matching_invalidated = invalidate_matching(req.mouse)
+        for name in threshold_names:
+            value = getattr(req, name)
+            if value is not None and not np.isfinite(value):
+                raise ValueError(f"{name} must be finite when enabled.")
+        for name in (
+            "min_footprint_area", "max_footprint_area",
+            "min_temporal_contrast", "min_source_snr",
+        ):
+            value = getattr(req, name)
+            if value is not None and value < 0:
+                raise ValueError(f"{name} must be non-negative.")
+        for name in (
+            "max_footprint_eccentricity",
+            "min_classifier_score",
+        ):
+            value = getattr(req, name)
+            if value is not None and not 0 <= value <= 1:
+                raise ValueError(f"{name} must be between 0 and 1.")
+        if (
+            req.min_spatial_correlation is not None
+            and not -1 <= req.min_spatial_correlation <= 1
+        ):
+            raise ValueError("min_spatial_correlation must be between -1 and 1.")
+        if (
+            req.min_footprint_area is not None
+            and req.max_footprint_area is not None
+            and req.min_footprint_area > req.max_footprint_area
+        ):
+            raise ValueError("Minimum footprint area cannot exceed maximum footprint area.")
+        sessions_result = []
+        for session in _quality_sessions(req):
+            quality = db.load_session_quality(
+                session["cohort"],
+                session["mouse"],
+                session["session_type"],
+                session["session_name"],
+            )
+            common = quality["common"]
+            source = quality["source"]
+            candidates = []
+            cell_count = len(common["FootprintArea"])
+            for index in range(cell_count):
+                failures = []
+
+                def fail(rule, value):
+                    failures.append({"rule": rule, "value": float(value)})
+
+                area = common["FootprintArea"][index]
+                temporal_contrast = common["TemporalContrast"][index]
+                eccentricity = common["FootprintEccentricity"][index]
+                if req.min_footprint_area is not None and area < req.min_footprint_area:
+                    fail("min_footprint_area", area)
+                if req.max_footprint_area is not None and area > req.max_footprint_area:
+                    fail("max_footprint_area", area)
+                if (
+                    req.min_temporal_contrast is not None
+                    and temporal_contrast < req.min_temporal_contrast
+                ):
+                    fail("min_temporal_contrast", temporal_contrast)
+                if (
+                    req.max_footprint_eccentricity is not None
+                    and eccentricity > req.max_footprint_eccentricity
+                ):
+                    fail("max_footprint_eccentricity", eccentricity)
+
+                accepted = source.get("Accepted")
+                if req.flag_source_rejected and accepted is not None and accepted[index] == 0:
+                    fail("source_rejected", accepted[index])
+                for source_name, threshold, rule in (
+                    ("TemporalSNR", req.min_source_snr, "min_source_snr"),
+                    ("SpatialCorrelation", req.min_spatial_correlation, "min_spatial_correlation"),
+                    ("ClassifierScore", req.min_classifier_score, "min_classifier_score"),
+                ):
+                    values = source.get(source_name)
+                    if (
+                        threshold is not None
+                        and values is not None
+                        and index < len(values)
+                        and np.isfinite(values[index])
+                        and values[index] < threshold
+                    ):
+                        fail(rule, values[index])
+                if failures:
+                    candidates.append({"index": index, "failed_rules": failures})
+            sessions_result.append({
+                "cohort": session["cohort"],
+                "mouse": session["mouse"],
+                "session_type": session["session_type"],
+                "session_name": session["session_name"],
+                "display_name": session["display_name"],
+                "candidate_indices": [item["index"] for item in candidates],
+                "candidates": candidates,
+            })
         return {
             "status": "success",
-            "discarded": discarded_counts,
-            "reasons": reason_counts,
-            "total_discarded": int(sum(discarded_counts.values())),
-            "db_switched": db_switched,
-            "matching_invalidated": matching_invalidated,
-            "workspace": workspace.status(),
+            "sessions": sessions_result,
+            "total_candidates": int(sum(len(item["candidates"]) for item in sessions_result)),
+            "mutated": False,
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

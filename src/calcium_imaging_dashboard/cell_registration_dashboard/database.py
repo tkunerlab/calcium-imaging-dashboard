@@ -7,6 +7,7 @@ import tempfile
 import re
 from pathlib import Path
 from threading import RLock
+from .quality import cell_quality_metrics
 
 class CalciumImagingDatabase:
     def __init__(self, db_path=None):
@@ -41,12 +42,12 @@ class CalciumImagingDatabase:
         path = Path(db_path)
         suffix = path.suffix
         stem = path.stem
-        if stem.endswith("_processed"):
-            raw = path.with_name(f"{stem[:-10]}{suffix}")
+        if stem.endswith("_curated"):
+            raw = path.with_name(f"{stem[:-8]}{suffix}")
             processed = path
         else:
             raw = path
-            processed = path.with_name(f"{stem}_processed{suffix}")
+            processed = path.with_name(f"{stem}_curated{suffix}")
         return str(raw), str(processed)
 
     def _working_read_path(self):
@@ -71,7 +72,7 @@ class CalciumImagingDatabase:
         return self.processed_db_path
 
     def _ensure_processed_db_copy(self):
-        """Ensures that [DatabaseName]_processed.mat exists as a copy of [DatabaseName].mat."""
+        """Ensure that the sibling ``_curated`` checkpoint exists."""
         if not os.path.exists(self.processed_db_path):
             if not os.path.exists(self.raw_db_path):
                 raise FileNotFoundError(
@@ -353,11 +354,99 @@ class CalciumImagingDatabase:
                 spatial = arrays[0]
         return mip, np.sum(spatial, axis=0)
 
+    @staticmethod
+    def _original_indices(record):
+        indices = []
+        for item in record.lineage:
+            if item.startswith("original:"):
+                try:
+                    indices.append(int(item.split(":", 1)[1]))
+                except ValueError:
+                    continue
+        return indices
+
+    @staticmethod
+    def _replace_dataset(group, name, data, h5_path, dtype=None):
+        if name in group:
+            del group[name]
+        array = np.asarray(data)
+        dtype = np.dtype(dtype or array.dtype)
+        dataset = group.create_dataset(name, data=array, dtype=dtype)
+        if np.issubdtype(dtype, np.integer):
+            dataset.attrs["MATLAB_class"] = b"int8" if dtype.itemsize == 1 else b"int64"
+        else:
+            dataset.attrs["MATLAB_class"] = b"single" if dtype == np.dtype("float32") else b"double"
+        dataset.attrs["H5PATH"] = f"/{h5_path}".encode("utf-8")
+        return dataset
+
+    @classmethod
+    def _map_cell_aligned_array(cls, original, records, fill_value=np.nan, merge=True):
+        original = np.asarray(original)
+        output_shape = (len(records),) + original.shape[1:]
+        dtype = np.result_type(original.dtype, np.asarray(fill_value).dtype)
+        result = np.full(output_shape, fill_value, dtype=dtype)
+        for output_index, record in enumerate(records):
+            indices = [
+                index for index in cls._original_indices(record)
+                if 0 <= index < original.shape[0]
+            ]
+            if not indices:
+                continue
+            if len(indices) == 1:
+                result[output_index] = original[indices[0]]
+            elif merge:
+                values = original[indices]
+                finite = np.isfinite(values)
+                if np.any(finite):
+                    safe = np.where(finite, values, -np.inf)
+                    merged = np.max(safe, axis=0)
+                    result[output_index] = np.where(np.isfinite(merged), merged, fill_value)
+        return result
+
+    def load_session_quality(self, cohort, mouse, session_type, session):
+        """Return live common metrics and any aligned native source QC."""
+        calcium = self.load_session_calcium_data(
+            cohort, mouse, session_type, session, warp_cached=False
+        )
+        spatial = calcium["spatial_footprints"]
+        temporal = calcium["temporal_footprints"]
+        quality = {"common": cell_quality_metrics(spatial, temporal), "source": {}}
+        key = (cohort, mouse, session_type, session)
+        records = (
+            self.workspace.records_if_loaded(key)
+            if self.workspace is not None and self.view_mode != "raw"
+            else None
+        )
+        cal_path = f"{self.db_var_name}/{cohort}/{mouse}/{session_type}/{session}/CalciumData"
+        with h5py.File(self._read_path(), "r") as handle:
+            source_path = f"{cal_path}/CellQuality/Source"
+            if source_path not in handle:
+                return quality
+            for name, dataset in handle[source_path].items():
+                values = np.asarray(dataset[:]).reshape(-1)
+                if records is not None:
+                    fill = -1 if name == "Accepted" else np.nan
+                    values = self._map_cell_aligned_array(
+                        values, records, fill_value=fill, merge=False
+                    ).reshape(-1)
+                elif values.size != spatial.shape[0]:
+                    continue
+                quality["source"][name] = values
+        return quality
+
     def save_workspace(self, mark_saved=True, refresh_metadata=True, payload=None):
-        """Atomically materialize staged workspace edits into processed output."""
+        """Atomically materialize staged workspace edits into the curated output."""
         if self.workspace is None:
             return self.processed_db_path
-        changes, deleted = payload if payload is not None else self.workspace.save_payload()
+        save_payload = payload if payload is not None else self.workspace.save_payload()
+        if len(save_payload) == 3:
+            changes, deleted, records_by_key = save_payload
+        else:
+            changes, deleted = save_payload
+            records_by_key = {
+                key: self.workspace.records_if_loaded(key)
+                for key in changes
+            }
         if not changes and not deleted:
             return self.processed_db_path if os.path.exists(self.processed_db_path) else None
 
@@ -384,16 +473,70 @@ class CalciumImagingDatabase:
                         if cal_path not in f:
                             raise ValueError(f"CalciumData not found at {cal_path}")
                         cal_grp = f[cal_path]
+                        records = records_by_key.get(key)
+                        if records is None:
+                            records = self.workspace.records_if_loaded(key)
+                        records_available = records is not None
+                        records = tuple(records or ())
+                        optional_values = {}
+                        if records_available:
+                            for name in ("DeconvolvedEvents", "DeltaFOverF"):
+                                if name in cal_grp:
+                                    optional_values[name] = self._map_cell_aligned_array(
+                                        cal_grp[name][:], records, fill_value=np.nan, merge=True
+                                    )
+                        source_values = {}
+                        source_grp = cal_grp.get("CellQuality/Source")
+                        if records_available and source_grp is not None:
+                            for name, dataset in source_grp.items():
+                                fill = -1 if name == "Accepted" else np.nan
+                                source_values[name] = self._map_cell_aligned_array(
+                                    dataset[:], records, fill_value=fill, merge=False
+                                )
+                        computed_quality = cell_quality_metrics(spatial, temporal)
+                        common_quality = {}
+                        for name, computed in computed_quality.items():
+                            quality_path = f"CellQuality/{name}"
+                            if not records_available or quality_path not in cal_grp:
+                                common_quality[name] = computed
+                                continue
+                            values = self._map_cell_aligned_array(
+                                cal_grp[quality_path][:],
+                                records,
+                                fill_value=np.nan,
+                                merge=False,
+                            ).reshape(-1)
+                            for index, record in enumerate(records):
+                                if len(self._original_indices(record)) != 1 or not np.isfinite(values[index]):
+                                    values[index] = computed[index]
+                            common_quality[name] = values
                         sf_stored = np.transpose(spatial, (0, 2, 1)) if spatial.ndim == 3 else spatial
                         for name, array in (
                             ("SpatialFootprints", sf_stored),
                             ("TemporalFootprints", temporal),
                         ):
-                            if name in cal_grp:
-                                del cal_grp[name]
-                            ds = cal_grp.create_dataset(name, data=array, dtype="float64")
-                            ds.attrs["MATLAB_class"] = b"double"
-                            ds.attrs["H5PATH"] = f"/{cal_path.replace('/', '')}".encode("utf-8")
+                            self._replace_dataset(cal_grp, name, array, cal_path, "float64")
+                        for name, array in optional_values.items():
+                            self._replace_dataset(cal_grp, name, array, cal_path, "float64")
+
+                        quality_grp = cal_grp.require_group("CellQuality")
+                        if "TemporalSNR" in quality_grp:
+                            del quality_grp["TemporalSNR"]
+                        for name, values in common_quality.items():
+                            self._replace_dataset(
+                                quality_grp, name, values, f"{cal_path}/CellQuality", "float64"
+                            )
+                        if source_values:
+                            new_source_grp = quality_grp.require_group("Source")
+                            for name, values in source_values.items():
+                                dtype = "int8" if name == "Accepted" else "float64"
+                                self._replace_dataset(
+                                    new_source_grp,
+                                    name,
+                                    values,
+                                    f"{cal_path}/CellQuality/Source",
+                                    dtype,
+                                )
                     f.flush()
                 os.replace(temp_path, output)
             except Exception:
@@ -652,7 +795,7 @@ class CalciumImagingDatabase:
         """Aligns session footprints/traces to master IDs in-place, and saves matching metadata."""
         cohort = cohort_name or self.mouse_to_cohort[mouse_name]
         
-        # 1. Update [DatabaseName]_processed.mat in-place: reorder and align cell footprints/traces
+        # 1. Update the curated database in-place: reorder and align cell arrays.
         S = len(session_names)
         M = matching_matrix.shape[0]
         identity_by_display = {
@@ -688,6 +831,27 @@ class CalciumImagingDatabase:
                 # Footprints initialized to 0, Traces initialized to NaN
                 sf_aligned = np.zeros((M, W, H), dtype='float64')
                 tf_aligned = np.full((M, T), np.nan, dtype='float64')
+                aligned_optional = {}
+                original_optional = {}
+                for relative_name, fill_value in (
+                    ("DeconvolvedEvents", np.nan),
+                    ("DeltaFOverF", np.nan),
+                    ("CellQuality/TemporalContrast", np.nan),
+                    ("CellQuality/FootprintArea", np.nan),
+                    ("CellQuality/FootprintEccentricity", np.nan),
+                    ("CellQuality/Source/Accepted", -1),
+                    ("CellQuality/Source/TemporalSNR", np.nan),
+                    ("CellQuality/Source/SpatialCorrelation", np.nan),
+                    ("CellQuality/Source/ClassifierScore", np.nan),
+                ):
+                    if relative_name not in cal_grp:
+                        continue
+                    original = np.asarray(cal_grp[relative_name][:])
+                    original_optional[relative_name] = original
+                    dtype = np.int8 if relative_name.endswith("/Accepted") else np.float64
+                    aligned_optional[relative_name] = np.full(
+                        (M,) + original.shape[1:], fill_value, dtype=dtype
+                    )
                 
                 # Map matching indices
                 for i in range(M):
@@ -699,6 +863,10 @@ class CalciumImagingDatabase:
                         if 0 <= idx_0 < N_orig:
                             sf_aligned[i, :, :] = sf_orig[idx_0, :, :]
                             tf_aligned[i, :] = tf_orig[idx_0, :]
+                            for relative_name, aligned in aligned_optional.items():
+                                original = original_optional[relative_name]
+                                if idx_0 < original.shape[0]:
+                                    aligned[i] = original[idx_0]
 
                 cal_grp.attrs["ActiveCellCount"] = int(np.sum(~np.isnan(matching_matrix[:, s])))
                 
@@ -715,6 +883,18 @@ class CalciumImagingDatabase:
                 ds_tf = f.create_dataset(tf_path, data=tf_aligned, dtype='float64')
                 ds_tf.attrs['MATLAB_class'] = b'double'
                 ds_tf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+
+                for relative_name, aligned in aligned_optional.items():
+                    parent_name, dataset_name = relative_name.rsplit("/", 1) if "/" in relative_name else ("", relative_name)
+                    parent = cal_grp.require_group(parent_name) if parent_name else cal_grp
+                    dtype = "int8" if relative_name.endswith("/Accepted") else "float64"
+                    self._replace_dataset(
+                        parent,
+                        dataset_name,
+                        aligned,
+                        f"{cal_path}/{parent_name}".rstrip("/"),
+                        dtype,
+                    )
                 
         # 2. Save independent CellMatching_MouseName.mat using standard scipy.io.savemat (v7 format)
         prefix = f"{cohort}_{mouse_name}" if cohort_name else mouse_name

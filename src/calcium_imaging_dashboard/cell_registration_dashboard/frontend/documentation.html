@@ -92,7 +92,7 @@
   <header class="hero">
     <div class="eyebrow">User guide · workflow reference · developer notes</div>
     <h1>From extracted footprints to clean longitudinal cell tracks.</h1>
-    <p class="hero-copy">This guide covers the complete workflow: building a portable HDF5 database from CaImAn or Minian outputs, cleaning and merging components, aligning fields of view, matching cells across sessions, and safely saving a processed result.</p>
+    <p class="hero-copy">This guide covers the complete workflow: building a portable HDF5 database from CaImAn, Minian, or MIN1PIPE outputs, cleaning and merging components, aligning fields of view, matching cells across sessions, and safely saving a curated result.</p>
     <div class="hero-actions"><a class="button" href="#quick-start">Start the workflow</a><a class="button secondary" href="#code">Understand the code</a><a class="button secondary" href="/">Return to dashboard</a></div>
   </header>
 
@@ -104,15 +104,15 @@
 
     <main class="content">
       <section id="mental-model">
-        <div class="eyebrow">The important mental model</div><h2>Raw input, in-memory work, one processed checkpoint</h2>
-        <p class="section-lead">Treat the raw database as the reproducible source. Interactive changes are accumulated in a shared working state and immediately follow you between tabs. The header <strong>Save</strong> button writes a coordinated checkpoint to the processed database.</p>
-        <div class="workflow"><div>CaImAn / Minian</div><div>Raw HDF5</div><div>In-memory workspace</div><div>Processed HDF5 + matches</div></div>
+        <div class="eyebrow">The important mental model</div><h2>Raw input, in-memory work, one curated checkpoint</h2>
+        <p class="section-lead">Treat the raw database as the reproducible source. Interactive changes are accumulated in a shared working state and immediately follow you between tabs. The header <strong>Save</strong> button writes a coordinated <code>_curated</code> checkpoint.</p>
+        <div class="workflow"><div>CaImAn / Minian / MIN1PIPE</div><div>Raw HDF5</div><div>In-memory workspace</div><div>Curated HDF5 + matches</div></div>
         <div class="grid three">
           <div class="card"><h3>Raw Preview</h3><p>Use it for comparison. Cleaning, merges, alignment and matching are intended for the working copy, not the raw source.</p></div>
           <div class="card"><h3>Working Copy</h3><p>All tabs read the same in-memory cell and alignment state. Changing tabs does not require an intermediate disk write.</p></div>
           <div class="card"><h3>Save checkpoint</h3><p>Persists cleaning, merges, alignments and cell matching together. Undo/redo history is cleared only after a successful checkpoint.</p></div>
         </div>
-        <div class="note safe"><strong>Safety rule:</strong> keep an untouched raw database. If a raw file is selected, the dashboard establishes or uses a sibling processed file before a mutating save.</div>
+        <div class="note safe"><strong>Safety rule:</strong> keep an untouched raw database. If a raw file is selected, the dashboard establishes or uses its sibling <code>_curated</code> file before a mutating save.</div>
       </section>
 
       <section id="quick-start">
@@ -143,7 +143,7 @@
       <section id="cleaning">
         <div class="eyebrow">Tab 1</div><h2>Cell Cleaning & Merging</h2>
         <p class="section-lead">This tab removes artifact components and combines multiple detections that represent one biological cell. Changes are reflected in alignment and matching immediately.</p>
-        <figure><img src="/frontend/images/docs-01-clean-merge.png" alt="Cell cleaning and merging overview with quality and pairwise distributions"><figcaption><strong>Cell Cleaning & Merging.</strong> Review spatial footprints and temporal traces, use quality distributions to choose auto-clean thresholds, and inspect pairwise distributions before merging likely duplicate detections.</figcaption></figure>
+        <figure><img src="/frontend/images/docs-01-clean-merge.png" alt="Cell cleaning and merging overview with quality and pairwise distributions"><figcaption><strong>Cell Cleaning & Merging.</strong> Review spatial footprints and temporal traces, use quality distributions to find review candidates, and inspect pairwise distributions before merging likely duplicate detections.</figcaption></figure>
         <div class="grid">
           <div class="card"><h3>Individual session</h3><p>Select a session in the left list when an operation should affect only that session. Pairwise traces and metrics also have the clearest interpretation here.</p></div>
           <div class="card"><h3>Overview (all sessions)</h3><p>Select Overview to display the sessions in their current aligned coordinates. A selection can include components from many sessions; each edit is routed back to the owning session.</p></div>
@@ -155,6 +155,7 @@
           <tr><td>Discard Selected</td><td>Removes selected components from the working state.</td><td>Known artifacts.</td></tr>
           <tr><td>Discard Unselected</td><td>Keeps the selection and removes everything else in scope.</td><td>Small, confidently selected groups; review carefully.</td></tr>
           <tr><td>Merge Selected</td><td>Combines selected components and their traces within each session.</td><td>Split detections of one cell.</td></tr>
+          <tr><td>Find & Select Candidates</td><td>Applies only enabled common and available native CaImAn quality rules, then selects every failure without changing data.</td><td>Review the selection, then use Discard Selected if appropriate.</td></tr>
           <tr><td>Auto-merge Duplicates</td><td>Finds groups that jointly meet distance, temporal-correlation and spatial-overlap thresholds.</td><td>Screening many likely duplicates, followed by review.</td></tr>
           <tr><td>Pairwise Distributions</td><td>Computes pairwise distance, temporal correlation and overlap distributions for the current scope.</td><td>Choosing thresholds based on the data.</td></tr>
         </tbody></table></div>
@@ -207,13 +208,21 @@
 
       <section id="builder">
         <div class="eyebrow">Input preparation</div><h2>Database Builder</h2>
-        <p class="section-lead">The builder scans analysis folders, maps folder depths to the four database identity fields, validates arrays, and writes a chunked HDF5 database that the dashboard can open.</p>
-        <figure><img src="/frontend/images/docs-04-database-builder.png" alt="Database Builder four-step interface"><figcaption><strong>Database Builder.</strong> Choose an analysis folder and pipeline, discover/match the path structure, choose an output HDF5 file, then monitor the build log.</figcaption></figure>
+        <p class="section-lead">The builder scans session folders for configurable analysis-result patterns, maps folder depths to the four database identity fields, validates arrays, and writes a chunked HDF5 database that the dashboard can open.</p>
+        <figure><img src="/frontend/images/docs-04-database-builder.png" alt="Database Builder four-step interface"><figcaption><strong>Database Builder.</strong> Choose a representative session folder, pipeline, and recursive result pattern; discover/match the path structure; choose an output HDF5 file; then monitor the build log.</figcaption></figure>
         <h3>Launch</h3><p>Run <code>db-builder</code>. The interface opens automatically at <code>http://127.0.0.1:8001</code>; use <code>db-builder --port PORT</code> if that port is occupied.</p>
         <h3>Four-step build</h3>
-        <ol><li><strong>Select Analysis Folder & Type.</strong> Point to a representative <code>*-analysis</code> folder and choose CaImAn or Minian.</li><li><strong>Discover Path Structure.</strong> Map folder levels to <code>CohortName</code>, <code>MouseName</code>, <code>SessionType</code>, <code>SessionNumber</code>, Ignore, or Split. Supply global values when a field is not encoded in the path.</li><li><strong>Choose Output File.</strong> Select a portable <code>.h5</code> or MATLAB-v7.3-compatible file location. The code uses the chosen path; no laboratory-specific absolute path is embedded.</li><li><strong>Build.</strong> Review the live log. Duplicate destination mappings and invalid array shapes stop the affected build instead of silently overwriting ambiguous sessions.</li></ol>
+        <ol><li><strong>Select Session Folder & Pipeline.</strong> Point to a representative session folder and edit the supplied recursive result pattern if your analysis output uses another name or location. The defaults are <code>caiman-analysis/**/caiman_results.hdf5</code>, <code>minian-analysis/**/A.zarr</code>, and <code>**/*_data_processed*.mat</code>. A pattern may identify a file or folder; when several results match within a session, the newest by modification time is selected.</li><li><strong>Discover Path Structure.</strong> Map folder levels to <code>CohortName</code>, <code>MouseName</code>, <code>SessionType</code>, <code>SessionNumber</code>, Ignore, or Split. Supply global values when a field is not encoded in the path.</li><li><strong>Choose Output File.</strong> Select a portable <code>.h5</code> location and optionally configure per-session stimulus tables or one hierarchy-matched stimulus file.</li><li><strong>Build.</strong> Review the live log. Duplicate destinations and incompatible required arrays are reported per session.</li></ol>
         <h3>Supported inputs</h3>
-        <div class="grid"><div class="card"><h3>CaImAn</h3><p>Reads <code>caiman_results.hdf5</code> from the newest date-stamped directory (or the analysis directory). Spatial <code>A</code> and temporal <code>C</code> are required. The MIP is recovered from available CaImAn image/background/movie sources, with footprint maximum as a last resort.</p></div><div class="card"><h3>Minian</h3><p>Reads <code>A.zarr</code>, <code>C.zarr</code> and <code>max_proj.zarr</code>, either directly below the newest run directory or its <code>data</code> subfolder.</p></div></div>
+        <div class="grid three"><div class="card"><h3>CaImAn</h3><p>Maps <code>A</code>, <code>C</code>, optional <code>S</code>/<code>F_dff</code>, and aligned <code>idx_components</code>, <code>SNR_comp</code>, <code>r_values</code>, and <code>cnn_preds</code>. Native quality values remain supplemental CaImAn evidence.</p></div><div class="card"><h3>Minian</h3><p>Maps <code>A.zarr</code>, <code>C.zarr</code>, <code>max_proj.zarr</code>, and optional <code>S.zarr</code>.</p></div><div class="card"><h3>MIN1PIPE</h3><p>Maps <code>roifn</code>, <code>sigfn</code>, and <code>imax</code>, and retains optional <code>spkfn</code> and <code>dff</code>. Classic and v7.3 MAT files are supported. If the default wildcard finds both processed and refined results, the newest file is used.</p></div></div>
+        <div class="table-wrap"><table><thead><tr><th>Database dataset</th><th>CaImAn</th><th>Minian</th><th>MIN1PIPE</th></tr></thead><tbody>
+          <tr><td>SpatialFootprints</td><td><code>A</code></td><td><code>A</code></td><td><code>roifn</code></td></tr>
+          <tr><td>TemporalFootprints</td><td><code>C</code></td><td><code>C</code></td><td><code>sigfn</code></td></tr>
+          <tr><td>MaxProjection</td><td>selected FOV summary</td><td><code>max_proj</code></td><td><code>imax</code></td></tr>
+          <tr><td>DeconvolvedEvents</td><td><code>S</code></td><td><code>S</code></td><td><code>spkfn</code></td></tr>
+          <tr><td>DeltaFOverF</td><td><code>F_dff</code></td><td>normally absent</td><td><code>dff</code></td></tr>
+        </tbody></table></div>
+        <h3>Optional stimulus input</h3><p>Per-session CSV/XLSX tables use columns <code>frame</code> and <code>stimulus</code>; frames are positive 1-based integers and multiple stimuli may share a frame. A combined MAT/HDF5 file may mirror <code>Database/Cohort/Mouse/SessionType/SessionNumber/StimulusData</code>, with one frame vector per valid stimulus name. Invalid table rows are skipped with row-specific warnings.</p>
         <h3>Storage choices</h3><p><span class="badge">float32 or float64</span><span class="badge">gzip, lzf or no compression</span><span class="badge">replace, skip or error on existing session</span></p>
         <p>The builder writes sessions through a temporary group and swaps them into place only after the full session is valid. Existing content can therefore be preserved if a session write fails.</p>
         <h3>Reusable mapping configurations</h3><p>Save a mapping configuration when multiple cohorts follow the same folder convention. Configurations are JSON and contain the path-depth rules, global values and build options; keep machine-specific root/output paths out of shared example configs.</p>
@@ -230,6 +239,8 @@
                     ├── SpatialFootprints   # N × width × height on disk
                     ├── TemporalFootprints  # N × time
                     └── MaxProjection       # width × height on disk</pre>
+        <p>Schema 1.2 also permits cell-aligned <code>DeconvolvedEvents</code> and <code>DeltaFOverF</code>, stores common metrics under <code>CalciumData/CellQuality</code>, stores aligned native evidence under optional <code>CellQuality/Source</code>, and stores optional named frame arrays in the session-level <code>StimulusData</code> group.</p>
+        <p><strong>FootprintArea</strong> counts support pixels above 20% of the footprint peak; <strong>FootprintEccentricity</strong> describes elongation of that support; <strong>TemporalContrast</strong> divides the 99th-percentile amplitude above the median by the trace standard deviation. Low contrast indicates a trace without strong high excursions and can be flagged for review. Native CaImAn SNR is retained separately and is not assumed comparable across pipelines. Source <code>Accepted</code> uses 1/0/-1 for accepted/rejected/unknown; a newly merged cell receives unknown/NaN source values because CaImAn did not evaluate that derived component.</p>
         <p>The builder accepts loader arrays as spatial <code>(N,H,W)</code>, temporal <code>(N,T)</code>, and MIP <code>(H,W)</code>, validates matching cell/FOV dimensions, and transposes spatial images and MIP for the MATLAB-compatible on-disk convention.</p>
         <div class="grid"><div class="card"><h3>Session attributes</h3><p>Source relative path, analysis type, MIP source, cell count and frame count document provenance.</p></div><div class="card"><h3>Database attributes</h3><p>Schema name/version, builder identity and last-build timestamp support future compatibility checks.</p></div></div>
       </section>
@@ -240,7 +251,7 @@
         <h3>Dashboard backend: <code>dashboard_py/</code></h3>
         <div class="table-wrap"><table><thead><tr><th>Module</th><th>Responsibility</th><th>Change with care</th></tr></thead><tbody>
           <tr><td><code>main.py</code></td><td>FastAPI routes, request models, cache scoping, orchestration for cleaning/alignment/matching, and frontend serving.</td><td>Keep route payloads backward compatible with <code>frontend/index.html</code>.</td></tr>
-          <tr><td><code>database.py</code></td><td>HDF5/MATLAB-v7.3 reading, processed-file creation, session arrays, alignment persistence and matching outputs.</td><td>Preserve orientation conventions and raw/processed separation.</td></tr>
+          <tr><td><code>database.py</code></td><td>HDF5/MATLAB-v7.3 reading, curated-file creation, session arrays, alignment persistence and matching outputs.</td><td>Preserve orientation conventions and raw/curated separation.</td></tr>
           <tr><td><code>workspace.py</code></td><td>Shared in-memory session cells, alignment/matching domains, transactions, undo/redo and save snapshots.</td><td>All cross-tab mutations should be represented as one transaction with a clear label.</td></tr>
           <tr><td><code>save_coordinator.py</code></td><td>Stages and commits cells, alignments and matching as one user checkpoint.</td><td>Only mark history saved after every required output succeeds.</td></tr>
           <tr><td><code>alignment_models.py</code></td><td>Canonical transform representation and serialization helpers.</td><td>Use one transform convention at API, workspace and disk boundaries.</td></tr>
@@ -252,7 +263,7 @@
         <div class="table-wrap"><table><thead><tr><th>Module</th><th>Responsibility</th></tr></thead><tbody>
           <tr><td><code>main.py</code></td><td>Builder FastAPI UI, folder/file pickers, discovery/scan/build endpoints, background build status and configuration I/O.</td></tr>
           <tr><td><code>builder.py</code></td><td>Session discovery, folder-depth mapping, collision validation, HDF5 chunking/compression and atomic session publication.</td></tr>
-          <tr><td><code>loader.py</code></td><td>Normalizes CaImAn and Minian outputs into the common spatial/temporal/MIP array contract.</td></tr>
+          <tr><td><code>loader.py</code></td><td>Normalizes CaImAn, Minian and MIN1PIPE outputs into the common spatial/temporal/MIP array contract.</td></tr>
           <tr><td><code>config.py</code></td><td>Portable JSON configuration load/save.</td></tr>
           <tr><td><code>frontend/index.html</code></td><td>Four-step discovery, mapping, output and progress interface.</td></tr>
         </tbody></table></div>
@@ -264,7 +275,7 @@
   → JSON response and canvas/chart rerender
   → header Save
   → SaveCoordinator snapshot
-  → processed HDF5 + matching result file</pre>
+  → curated HDF5 + matching result file</pre>
         <h3>Safe extension pattern</h3>
         <ol><li>Add or reuse a small request/response contract.</li><li>Load only the requested cohort/animal/session arrays.</li><li>Perform the mutation inside a workspace transaction and name it for Undo.</li><li>Invalidate only derived caches affected by that domain.</li><li>Render from the returned/current workspace state.</li><li>Add a characterization or regression test before changing numerical behavior.</li></ol>
       </section>
@@ -293,7 +304,7 @@
         <details><summary>Sequential NCC or comparison looks wrong</summary><div><p>Confirm session order first. Sequential mode compares a target to its crawl neighbour for visualization and step NCC, while accumulated transforms remain anchored to the chosen root.</p></div></details>
         <details><summary>Temporal traces do not appear in a conflict</summary><div><p>Open <strong>Check it out</strong> from an intrasession conflict and ensure two local cells are selected. The trace endpoint requires the owning cohort, animal, session type, session name and both cell indices.</p></div></details>
         <details><summary>Save is disabled</summary><div><p>No workspace mutation is pending, or no cohort/animal working scope is active. Make a working-copy edit and check the Unsaved indicator.</p></div></details>
-        <details><summary>A build finds no sessions</summary><div><p>Verify the selected pipeline and folder suffix, then inspect the discovered depth rules. CaImAn expects <code>caiman_results.hdf5</code>; Minian expects the three Zarr datasets.</p></div></details>
+        <details><summary>A build finds no sessions</summary><div><p>Verify the selected pipeline, recursive result pattern, and discovered depth rules. Test the pattern against the representative session first. CaImAn expects <code>caiman_results.hdf5</code>; Minian expects the three Zarr datasets.</p></div></details>
         <details><summary>A build reports duplicate destinations</summary><div><p>Two source folders mapped to the same cohort/animal/session-type/session-number key. Correct the depth mapping or split rule; do not suppress the collision.</p></div></details>
         <details><summary>The app is slow on a network share</summary><div><p>Keep intermediate edits in memory, use individual-session trace views, prefer float32/compression where precision policy permits, and avoid repeated disk checkpoints during exploration.</p></div></details>
       </section>
