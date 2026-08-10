@@ -4,10 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
-- Keep processed databases and matching-result files visible when saving on
-  Windows mapped drives.
-
-## [0.1.0] - 2026-07-28
+## [0.1.0] - 2026-08-10
 
 ### Added
 
@@ -24,3 +21,14 @@ All notable changes to this project will be documented in this file.
   data when switching between a single session and Overview.
 - Existing analysis regression tests and cross-platform installation checks.
 - Five-session example database for manual browser validation.
+- Documentation screenshots covering cleaning, alignment, cell matching, and
+  database building.
+- Lean CaImAn, Minian, and MIN1PIPE imports with shared cross-pipeline quality
+  metrics and optional native quality evidence.
+- Interactive quality review with disabled-by-default thresholds and explicit
+  confirmation before discarding selected cells.
+
+### Fixed
+
+- Keep processed databases and matching-result files visible when saving on
+  Windows mapped drives.

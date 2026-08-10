@@ -27,6 +27,11 @@ provide compatible builds.
 Clone the repository, enter its directory, and run the installer for your
 operating system:
 
+```bash
+git clone https://github.com/tkunerlab/calcium-imaging-dashboard.git
+cd calcium-imaging-dashboard
+```
+
 ### Windows
 
 Double-click `install-windows.bat`, or run:
@@ -149,6 +154,13 @@ immediately.
 
 Please cite the software using `CITATION.cff`. GitHub can render this file as a
 ready-to-copy citation.
+
+## Contributing and security
+
+Bug reports, feature requests, and contributions are welcome. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Please
+report security vulnerabilities privately according to [`SECURITY.md`](SECURITY.md)
+rather than in a public issue.
 
 ## License
 
