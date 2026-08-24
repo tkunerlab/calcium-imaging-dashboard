@@ -366,12 +366,62 @@ class CalciumImagingDatabase:
         return indices
 
     @staticmethod
-    def _replace_dataset(group, name, data, h5_path, dtype=None):
-        if name in group:
-            del group[name]
+    def _dataset_chunks(name, shape):
+        """Return bounded chunks matching the database builder's layout."""
+        if not shape or any(size == 0 for size in shape):
+            return None
+        if name == "SpatialFootprints":
+            if len(shape) == 3:
+                return (1, min(shape[1], 256), min(shape[2], 256))
+            return tuple(min(size, 256) for size in shape)
+        if name in {"TemporalFootprints", "DeconvolvedEvents", "DeltaFOverF"}:
+            if len(shape) == 2:
+                return (min(shape[0], 32), min(shape[1], 2048))
+            return tuple(min(size, 2048) for size in shape)
+        if name == "MaxProjection":
+            return tuple(min(size, 256) for size in shape)
+        return None
+
+    @classmethod
+    def _replace_dataset(cls, group, name, data, h5_path, dtype=None):
+        """Replace a dataset without discarding its compact storage settings."""
         array = np.asarray(data)
-        dtype = np.dtype(dtype or array.dtype)
-        dataset = group.create_dataset(name, data=array, dtype=dtype)
+        existing = group.get(name)
+        existing_dtype = existing.dtype if existing is not None else None
+        existing_compression = existing.compression if existing is not None else None
+        existing_compression_opts = (
+            existing.compression_opts if existing is not None else None
+        )
+        existing_chunks = existing.chunks if existing is not None else None
+
+        dtype = np.dtype(dtype or existing_dtype or array.dtype)
+        options = {}
+        compressible = array.ndim > 0 and all(size > 0 for size in array.shape)
+        if compressible:
+            compression = existing_compression or "gzip"
+            options["compression"] = compression
+            if existing_compression and existing_compression_opts is not None:
+                options["compression_opts"] = existing_compression_opts
+            elif compression == "gzip":
+                options["compression_opts"] = 4
+            options["shuffle"] = True
+
+            if existing_chunks is not None and len(existing_chunks) == array.ndim:
+                options["chunks"] = tuple(
+                    min(chunk, size)
+                    for chunk, size in zip(existing_chunks, array.shape)
+                )
+            else:
+                chunks = cls._dataset_chunks(name, array.shape)
+                if chunks is not None:
+                    options["chunks"] = chunks
+
+        if existing is not None:
+            del group[name]
+            # Close the old dataset ID before allocating its replacement so
+            # HDF5 can reuse the released blocks instead of growing each save.
+            existing = None
+        dataset = group.create_dataset(name, data=array, dtype=dtype, **options)
         if np.issubdtype(dtype, np.integer):
             dataset.attrs["MATLAB_class"] = b"int8" if dtype.itemsize == 1 else b"int64"
         else:
@@ -515,9 +565,9 @@ class CalciumImagingDatabase:
                             ("SpatialFootprints", sf_stored),
                             ("TemporalFootprints", temporal),
                         ):
-                            self._replace_dataset(cal_grp, name, array, cal_path, "float64")
+                            self._replace_dataset(cal_grp, name, array, cal_path)
                         for name, array in optional_values.items():
-                            self._replace_dataset(cal_grp, name, array, cal_path, "float64")
+                            self._replace_dataset(cal_grp, name, array, cal_path)
 
                         quality_grp = cal_grp.require_group("CellQuality")
                         if "TemporalSNR" in quality_grp:
@@ -592,24 +642,16 @@ class CalciumImagingDatabase:
             cal_grp = f[cal_path]
             
             # Load, slice, and rewrite SpatialFootprints (N, W, H)
-            sf_path = f"{cal_path}/SpatialFootprints"
             sf = cal_grp['SpatialFootprints'][:]
             sf_sliced = sf[keep_indices, :, :]
             
-            del cal_grp['SpatialFootprints']
-            ds_sf = f.create_dataset(sf_path, data=sf_sliced, dtype='float64')
-            ds_sf.attrs['MATLAB_class'] = b'double'
-            ds_sf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+            self._replace_dataset(cal_grp, "SpatialFootprints", sf_sliced, cal_path)
             
             # Load, slice, and rewrite TemporalFootprints (N, T)
-            tf_path = f"{cal_path}/TemporalFootprints"
             tf = cal_grp['TemporalFootprints'][:]
             tf_sliced = tf[keep_indices, :]
             
-            del cal_grp['TemporalFootprints']
-            ds_tf = f.create_dataset(tf_path, data=tf_sliced, dtype='float64')
-            ds_tf.attrs['MATLAB_class'] = b'double'
-            ds_tf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+            self._replace_dataset(cal_grp, "TemporalFootprints", tf_sliced, cal_path)
             
         # Update our cached session list counts
         self.metadata = self._scan_metadata()
@@ -629,10 +671,8 @@ class CalciumImagingDatabase:
             cal_grp = f[cal_path]
             
             # Load arrays
-            sf_path = f"{cal_path}/SpatialFootprints"
             sf = cal_grp['SpatialFootprints'][:]
             
-            tf_path = f"{cal_path}/TemporalFootprints"
             tf = cal_grp['TemporalFootprints'][:]
             
             # Identify keep index and delete indices
@@ -659,15 +699,9 @@ class CalciumImagingDatabase:
             tf_sliced = tf[keep_indices, :]
             
             # Save sliced back to file
-            del cal_grp['SpatialFootprints']
-            ds_sf = f.create_dataset(sf_path, data=sf_sliced, dtype='float64')
-            ds_sf.attrs['MATLAB_class'] = b'double'
-            ds_sf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+            self._replace_dataset(cal_grp, "SpatialFootprints", sf_sliced, cal_path)
             
-            del cal_grp['TemporalFootprints']
-            ds_tf = f.create_dataset(tf_path, data=tf_sliced, dtype='float64')
-            ds_tf.attrs['MATLAB_class'] = b'double'
-            ds_tf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+            self._replace_dataset(cal_grp, "TemporalFootprints", tf_sliced, cal_path)
             
         # Re-scan metadata structure
         self.metadata = self._scan_metadata()
@@ -685,13 +719,11 @@ class CalciumImagingDatabase:
             cal_grp = f[cal_path]
             
             # Load arrays
-            sf_path = f"{cal_path}/SpatialFootprints"
             sf = cal_grp['SpatialFootprints'][:] # Shape (N, W, H)
             
             # Note: transpose to (N, H, W) for get_sparse_footprints if stored as (N, W, H) in H5
             # get_sparse_footprints expects (N, H, W) shape, let's keep shape as loaded
             
-            tf_path = f"{cal_path}/TemporalFootprints"
             tf = cal_grp['TemporalFootprints'][:] # Shape (N, T)
             
             n_cells = sf.shape[0]
@@ -777,15 +809,9 @@ class CalciumImagingDatabase:
             tf_sliced = tf[cells_to_keep, :]
             
             # Save back to HDF5
-            del cal_grp['SpatialFootprints']
-            ds_sf = f.create_dataset(sf_path, data=sf_sliced, dtype='float64')
-            ds_sf.attrs['MATLAB_class'] = b'double'
-            ds_sf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+            self._replace_dataset(cal_grp, "SpatialFootprints", sf_sliced, cal_path)
             
-            del cal_grp['TemporalFootprints']
-            ds_tf = f.create_dataset(tf_path, data=tf_sliced, dtype='float64')
-            ds_tf.attrs['MATLAB_class'] = b'double'
-            ds_tf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+            self._replace_dataset(cal_grp, "TemporalFootprints", tf_sliced, cal_path)
             
         # Re-scan metadata structure
         self.metadata = self._scan_metadata()
@@ -829,8 +855,8 @@ class CalciumImagingDatabase:
                 
                 # Preallocate aligned/resized arrays
                 # Footprints initialized to 0, Traces initialized to NaN
-                sf_aligned = np.zeros((M, W, H), dtype='float64')
-                tf_aligned = np.full((M, T), np.nan, dtype='float64')
+                sf_aligned = np.zeros((M, W, H), dtype=sf_orig.dtype)
+                tf_aligned = np.full((M, T), np.nan, dtype=tf_orig.dtype)
                 aligned_optional = {}
                 original_optional = {}
                 for relative_name, fill_value in (
@@ -848,7 +874,7 @@ class CalciumImagingDatabase:
                         continue
                     original = np.asarray(cal_grp[relative_name][:])
                     original_optional[relative_name] = original
-                    dtype = np.int8 if relative_name.endswith("/Accepted") else np.float64
+                    dtype = np.int8 if relative_name.endswith("/Accepted") else original.dtype
                     aligned_optional[relative_name] = np.full(
                         (M,) + original.shape[1:], fill_value, dtype=dtype
                     )
@@ -870,24 +896,17 @@ class CalciumImagingDatabase:
 
                 cal_grp.attrs["ActiveCellCount"] = int(np.sum(~np.isnan(matching_matrix[:, s])))
                 
-                # Delete and rewrite SpatialFootprints
-                sf_path = f"{cal_path}/SpatialFootprints"
-                del cal_grp['SpatialFootprints']
-                ds_sf = f.create_dataset(sf_path, data=sf_aligned, dtype='float64')
-                ds_sf.attrs['MATLAB_class'] = b'double'
-                ds_sf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
-                
-                # Delete and rewrite TemporalFootprints
-                tf_path = f"{cal_path}/TemporalFootprints"
-                del cal_grp['TemporalFootprints']
-                ds_tf = f.create_dataset(tf_path, data=tf_aligned, dtype='float64')
-                ds_tf.attrs['MATLAB_class'] = b'double'
-                ds_tf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+                self._replace_dataset(
+                    cal_grp, "SpatialFootprints", sf_aligned, cal_path
+                )
+                self._replace_dataset(
+                    cal_grp, "TemporalFootprints", tf_aligned, cal_path
+                )
 
                 for relative_name, aligned in aligned_optional.items():
                     parent_name, dataset_name = relative_name.rsplit("/", 1) if "/" in relative_name else ("", relative_name)
                     parent = cal_grp.require_group(parent_name) if parent_name else cal_grp
-                    dtype = "int8" if relative_name.endswith("/Accepted") else "float64"
+                    dtype = "int8" if relative_name.endswith("/Accepted") else None
                     self._replace_dataset(
                         parent,
                         dataset_name,
@@ -990,16 +1009,17 @@ class CalciumImagingDatabase:
                     sf_warped = warp_footprints_rigid(sf, warp_mat_updated)
                     
                 # Write warped MaxProjection
-                del cal_grp['MaxProjection']
-                ds_mip = f.create_dataset(f"{cal_path}/MaxProjection", data=np.transpose(mip_warped), dtype='float64')
-                ds_mip.attrs['MATLAB_class'] = b'double'
-                ds_mip.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+                self._replace_dataset(
+                    cal_grp, "MaxProjection", np.transpose(mip_warped), cal_path
+                )
                 
                 # Write warped SpatialFootprints
-                del cal_grp['SpatialFootprints']
-                ds_sf = f.create_dataset(f"{cal_path}/SpatialFootprints", data=np.transpose(sf_warped, (0, 2, 1)), dtype='float64')
-                ds_sf.attrs['MATLAB_class'] = b'double'
-                ds_sf.attrs['H5PATH'] = f"/{cal_path.replace('/', '')}".encode('utf-8')
+                self._replace_dataset(
+                    cal_grp,
+                    "SpatialFootprints",
+                    np.transpose(sf_warped, (0, 2, 1)),
+                    cal_path,
+                )
                 
                 # Set AlignmentShift to [0, 0]
                 if 'AlignmentShift' in cal_grp:

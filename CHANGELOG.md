@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## [0.1.1] - 2026-08-24
+
+### Added
+
+- Trusted publishing workflow for releasing tagged packages to PyPI.
+
+### Fixed
+
+- Preserve HDF5 compression and numeric precision when curated calcium arrays
+  are rewritten, preventing sparse footprint data from expanding dramatically
+  after saving, aligning, cleaning, merging, or matching.
+
 ## [0.1.0] - 2026-08-10
 
 ### Added
