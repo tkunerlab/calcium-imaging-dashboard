@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Preserve HDF5 compression and numeric precision when curated calcium arrays
+  are rewritten, preventing sparse footprint data from expanding dramatically
+  after saving, aligning, cleaning, merging, or matching.
+
 ## [0.1.0] - 2026-08-10
 
 ### Added
