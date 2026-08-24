@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calcium-imaging-dashboard"
-version = "0.1.0"
+version = "0.1.1"
 description = "Local browser applications for building, cleaning, aligning, and matching calcium-imaging data."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
